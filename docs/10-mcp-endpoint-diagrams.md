@@ -513,117 +513,6 @@ sequenceDiagram
 
 ---
 
-## Docs
-
-### doc_register
-
-**Activity diagram**
-
-```mermaid
-flowchart TB
-  Start([Agent calls doc_register]) --> ValidateContext[Validate context_key]
-  ValidateContext --> GetScope[Get session scope]
-  GetScope --> Parse[Parse name, path, type, description?]
-  Parse --> Upsert[Add or update doc entry in project]
-  Upsert --> Return[Return doc entry]
-  Return --> End([End])
-```
-
-**Sequence diagram**
-
-```mermaid
-sequenceDiagram
-  participant Agent
-  participant Server
-  participant Session
-  participant Store
-
-  Agent->>+Server: doc_register(name, path, type, description?)
-  Server->>Server: Validate context_key
-  Server->>Session: Get scope (project_id)
-  Session-->>Server: scope
-  Server->>Store: registerDoc(project_id, name, path, type, description?)
-  Store-->>Server: Doc entry
-  Server-->>-Agent: Doc entry
-```
-
----
-
-### doc_list
-
-**Activity diagram**
-
-```mermaid
-flowchart TB
-  Start([Agent calls doc_list]) --> ValidateContext[Validate context_key]
-  ValidateContext --> GetScope[Get session scope]
-  GetScope --> Load[Load doc list from project]
-  Load --> Return[Return doc list]
-  Return --> End([End])
-```
-
-**Sequence diagram**
-
-```mermaid
-sequenceDiagram
-  participant Agent
-  participant Server
-  participant Session
-  participant Store
-
-  Agent->>+Server: doc_list()
-  Server->>Server: Validate context_key
-  Server->>Session: Get scope (project_id)
-  Session-->>Server: scope
-  Server->>Store: listDocs(project_id)
-  Store-->>Server: Docs[]
-  Server-->>-Agent: Doc list
-```
-
----
-
-### doc_read
-
-**Activity diagram**
-
-```mermaid
-flowchart TB
-  Start([Agent calls doc_read]) --> ValidateContext[Validate context_key]
-  ValidateContext --> GetScope[Get session scope]
-  GetScope --> ResolvePath[Resolve path relative to project root]
-  ResolvePath --> Read[Read file from filesystem]
-  Read --> Found{File exists and\nwithin project root?}
-  Found -->|No| Err[Return error]
-  Found -->|Yes| Return[Return file contents]
-  Return --> End([End])
-  Err --> End
-```
-
-**Sequence diagram**
-
-```mermaid
-sequenceDiagram
-  participant Agent
-  participant Server
-  participant Session
-  participant FS as File system
-
-  Agent->>+Server: doc_read(path)
-  Server->>Server: Validate context_key
-  Server->>Session: Get scope (project_id) and project root
-  Session-->>Server: scope, project_root
-  Server->>Server: Resolve path (relative to project root)
-  Server->>FS: Read file(path)
-  FS-->>Server: Content or error
-  alt File not found or outside root
-    Server-->>Agent: Error
-  else
-    Server-->>-Agent: File contents
-  end
-```
-
----
-
 ## Resources
 
 Resources are read-only. The server validates the context key and scope, then returns the current project state. No mutation.
@@ -640,7 +529,7 @@ flowchart TB
   ContextOk -->|Yes| GetScope[Get session scope]
   GetScope --> HasProject{Project in scope?}
   HasProject -->|No| ReturnEmpty[Return empty or error]
-  HasProject -->|Yes| Load[Load project metadata, tech stack, doc list from store]
+  HasProject -->|Yes| Load[Load project metadata, tech stack from store]
   Load --> Build[Build resource content]
   Build --> Return[Return spec to agent]
   Return --> End([End])
@@ -663,7 +552,7 @@ sequenceDiagram
   Server->>Session: Get scope (project_id)
   Session-->>Server: scope
   Server->>Store: getProject(project_id)
-  Store-->>Server: Project (metadata, tech stack, docs)
+  Store-->>Server: Project (metadata, tech stack)
   Server-->>-Agent: Resource content (spec)
 ```
 

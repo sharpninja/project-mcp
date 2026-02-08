@@ -28,14 +28,12 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 
 - **Backend** — PostgreSQL. Required for v1.
 - **Connection** — Configured via environment (e.g. `DATABASE_URL`, `PROJECT_MCP_CONNECTION_STRING`, or `ConnectionStrings__DefaultConnection`). No hardcoded connection strings.
-- **Schema** — Tables for project (metadata, tech stack, docs), work_items (**level = Work | Task; tasks are level = Task**), milestones, releases. UTF-8 encoding. Use standard PostgreSQL types; JSONB acceptable for tech stack, labels, or doc list if preferred.
+- **Schema** — Tables for project (metadata, tech stack), work_items (**level = Work | Task; tasks are level = Task**), milestones, releases. UTF-8 encoding. Use standard PostgreSQL types; JSONB acceptable for tech stack, labels where specified.
 - **Change tracking** — **Change tracking must be enabled on all fields of all entities** in the database. Every insert, update, and delete to entity data must be recorded (e.g. via audit tables, triggers, or application-level logging) so that what changed, when, and optionally by whom can be determined. Each change record must include the **session identifier**, **resource identifier**, and **correlation id** of the request (when available). No entity or field may be excluded. See [03 — Data Model](03-data-model.html) (Change tracking).
 - **Scope** — Single logical project per server process (or per connection) in v1; optional project_id on tables for future multi-project support.
-- **Project root** — Optional env (e.g. `PROJECT_MCP_ROOT`) or process cwd. Used only for **doc_read** (file paths in the repo); not for storing project data.
 
 ## Environment and configuration
 
-- **Project root** — Optional env var (e.g. `PROJECT_MCP_ROOT`) for **doc_read** file resolution. If unset, use process cwd.
 - **Database connection** — Required env or config for PostgreSQL (e.g. `DATABASE_URL`). No secrets in repo; use env or secret store in deployment.
 - **No secrets in repo** — No API keys or tokens in design or default config. Future integrations (e.g. GitHub) will use env-provided tokens.
 - **No config file required** — Server must run with no config file; env and MCP tool arguments are sufficient for v1.
@@ -57,7 +55,7 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 - **MCP agent identity** — The MCP client name (e.g. “cursor”, “copilot”) **must resolve to a Resource** in the enterprise. If no matching Resource exists, return **Unauthorized. Agent not approved for Enterprise** and reject the request; the resolved resource_id is used for audit logging.
 - **Cross-enterprise access attempts: log and follow up** — Any attempt to access data belonging to **another enterprise** (e.g. requesting a project by id that belongs to an enterprise not in the user’s scope, or submitting an update for an entity in another enterprise) must be **logged** with sufficient detail (e.g. endpoint, user/agent identity, session or context_key, requested entity or ids, target enterprise) for manual follow-up. Return an error (e.g. 403 Forbidden or equivalent) to the caller; do not return the data. Logging must be structured so operators can query for cross-enterprise attempts and follow up manually (e.g. security review, abuse investigation).
 - **Audit history access** — Provide a **read-only audit/history API** for SUDO/admin users to query by entity, date range, session, or resource.
-- **Path safety** — Any tool that reads files by path (e.g. `doc_read`) must resolve paths relative to project root and reject paths that escape the root (no `..` or absolute paths outside root).
+- **Path safety** — Any tool that accepts file paths must resolve them relative to a configured root and reject path traversal (no `..` or absolute paths outside root).
 - **Write scope** — Database writes only to the configured PostgreSQL database. File writes (if any) only under the designated project directory. No writes to arbitrary system paths.
 - **Input validation** — All tool arguments must be validated (types, allowed values). Invalid input must return a clear error, not crash.
 

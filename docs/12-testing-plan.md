@@ -23,7 +23,7 @@ This document defines a **detailed testing plan** for the Software Project Manag
 **Objectives:**
 
 - All tool and resource endpoints have at least one happy-path test (integration or E2E).
-- Path safety (doc_read) and input validation have dedicated unit tests.
+- Path safety and input validation have dedicated unit tests where applicable.
 - No secrets in tests; use env or test-specific config for DB.
 - CI runs unit and integration tests on every commit; E2E optionally on schedule or tag.
 
@@ -34,7 +34,7 @@ This document defines a **detailed testing plan** for the Software Project Manag
 ### 2.1 Scope and responsibilities
 
 - **Handlers / service logic:** Given valid/invalid inputs, assert returned result or thrown validation.
-- **Path resolution (doc_read):** Resolve path relative to root; reject `..`, absolute paths outside root, null/empty.
+- **Path resolution (if any file-path tool exists):** Resolve path relative to root; reject `..`, absolute paths outside root, null/empty.
 - **DTO / request parsing:** Deserialize tool arguments; validate required fields and types.
 - **Slug/ID resolution:** If implemented in a dedicated service, test slug → GUID resolution and invalid slug handling.
 
@@ -114,7 +114,7 @@ tests/
 ### 3.1 Scope and responsibilities
 
 - **Database:** Real PostgreSQL (Testcontainers or CI-provided service). Apply migrations before tests; optionally seed minimal data.
-- **Repositories / DbContext:** Create enterprise, project, requirement, standard, work item, task, issue, domain, system, asset, resource, keyword, milestone, release, doc; read and update; delete. Assert persistence and scope (e.g. task list filtered by project_id).
+- **Repositories / DbContext:** Create enterprise, project, requirement, standard, work item, task, issue, domain, system, asset, resource, keyword, milestone, release; read and update; delete. Assert persistence and scope (e.g. task list filtered by project_id).
 - **Session store:** If backed by DB or shared state, test context_key → scope resolution and scope_set/scope_get across "requests."
 - **Full tool flow with DB:** Call handler with valid scope and params; handler uses real repository; assert DB state and response (e.g. work_item_create inserts row, work_item_list returns it).
 
@@ -191,7 +191,6 @@ tests/
 | **Resources** | resource_create/list/update | CRUD with enterprise scope. |
 | **Keywords** | keyword_create/list/update | CRUD with enterprise scope. |
 | **Associations** | item_dependency_add/remove | Dependency created and removed. |
-| **Docs** | doc_register then doc_list | Entry appears in list. |
 | **Scope** | scope_set with valid scope_slug; then project_get_info | Returns project for that scope. |
 | **Scope** | scope_set with invalid scope_slug | Error; no project returned on subsequent get. |
 | **Scope** | Access project in another enterprise | 403 error; attempt logged. |
@@ -229,7 +228,7 @@ tests/
 12. Send task_update(id, status: "done"); then task_list; assert status updated.
 13. Send task_delete(id); then task_list; assert task gone.
 14. (Optional) Send requirement_create, work_item_create, issue_create, and domain_create; assert list results.
-15. (Optional) Send milestone_create, release_create, doc_register, doc_list, doc_read with safe path; assert success.
+15. (Optional) Send milestone_create, release_create; assert success.
 16. (Optional) Attempt out-of-scope read/write (different enterprise); assert 403 + log entry.
 17. Shut down server process.
 
@@ -276,15 +275,15 @@ This test validates that a **real agent** (Cursor agent CLI), driving a **locall
    - Start or attach to a Postgres instance (e.g. Testcontainers); apply migrations; optionally seed one enterprise (and optionally one project) so the agent can set scope.
    - Start the ProjectMCP server process pointing at this database (or ensure the Cursor agent CLI is configured to start/use this server).
    - Load the **prompt script** (see below).
-   - Record **initial DB state** (e.g. row counts for project, task, milestone, release, doc; or full snapshot of relevant tables).
+   - Record **initial DB state** (e.g. row counts for project, task, milestone, release; or full snapshot of relevant tables).
 
 2. **For each step in the script (in order):**
    - **Submit prompt:** Send the next prompt from the script to the Cursor agent CLI (e.g. via CLI stdin or a driver that invokes the CLI with the prompt).
    - **Wait for completion:** Wait until the agent has finished (CLI exits or signals completion). Use a timeout to avoid hangs.
-   - **Capture DB state:** Query the database for the state relevant to the test (e.g. all projects for the test enterprise, all tasks for the test project, milestones, releases, docs).
+   - **Capture DB state:** Query the database for the state relevant to the test (e.g. all projects for the test enterprise, all tasks for the test project, milestones, releases).
    - **Compare to expected state:** Compare the captured state to the **expected state for this step** (defined in the script or a companion file). Comparison may be:
      - Row counts and key fields (e.g. one project with name "ProjectMcp", two tasks with titles matching expected).
-     - Or a full snapshot (e.g. JSON export of project/tasks/milestones/releases/docs) diffed against a golden file.
+     - Or a full snapshot (e.g. JSON export of project/tasks/milestones/releases) diffed against a golden file.
    - **Pass/fail:** If the state does not match the expected state, **fail the test** and optionally capture logs and DB dump for debugging. Do **not** continue to the next prompt.
    - If the state matches, continue to the next step.
 
@@ -306,14 +305,13 @@ Example structure (prompts and expectations are illustrative):
 | 4 | “Add a task: ‘Implement data layer and migrations’.” | Exactly two tasks; second task title matches. |
 | 5 | “List all tasks and then mark the first task as in-progress.” | Two tasks; first task status = in-progress. |
 | 6 | “Add a milestone ‘v0.1’ and a release ‘0.1.0’ for this project.” | One milestone and one release; names/identifiers match. |
-| 7 | “Register a doc: name README, path README.md, type readme.” | One doc entry for the project; name, path, type match. |
 
 The actual **prompt script** and **expected state** (e.g. JSON or table) should live in the repo (e.g. `tests/ProjectMcp.Tests.Integration/CursorAgentScript/` or similar) so they can be versioned and updated when the scenario or schema changes.
 
 ### 5.5 Expected state format and comparison
 
 - **Format:** Expected state can be defined as:
-  - **Structured file (recommended):** e.g. JSON or YAML per step: `step-01-expected.json`, … listing expected entities (projects, tasks, milestones, releases, docs) with key fields (id optional, name, title, status, etc.). The test loads this file and compares to the DB snapshot (normalizing order if needed, e.g. sort by id or title).
+  - **Structured file (recommended):** e.g. JSON or YAML per step: `step-01-expected.json`, … listing expected entities (projects, tasks, milestones, releases) with key fields (id optional, name, title, status, etc.). The test loads this file and compares to the DB snapshot (normalizing order if needed, e.g. sort by id or title).
   - **Inline in script:** Script file has a section per step: prompt text plus expected state (table or mini-DSL).
 - **Comparison:** Compare only the fields that the agent is expected to have set (e.g. name, title, status, count). Ignore generated ids and timestamps unless they are needed for ordering. Use tolerant comparison (e.g. trim strings, ignore irrelevant tables).
 
@@ -352,7 +350,7 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | # | Area | Steps | Pass criteria |
 |---|------|--------|----------------|
 | 1 | Server start | Add server to Cursor config; restart or reload | Server starts; no errors in log. |
-| 2 | Tools visible | Open MCP / tools panel | scope_set, scope_get, enterprise_*, project_*, requirement_*, standard_*, work_item_*, task_*, issue_*, milestone_*, release_*, domain_*, system_*, asset_*, resource_*, keyword_*, work_queue_*, association tools, doc_* visible. |
+| 2 | Tools visible | Open MCP / tools panel | scope_set, scope_get, enterprise_*, project_*, requirement_*, standard_*, work_item_*, task_*, issue_*, milestone_*, release_*, domain_*, system_*, asset_*, resource_*, keyword_*, work_queue_*, association tools visible. |
 | 3 | Resources visible | Open resources or equivalent | project://current/spec, /tasks, /plan listed. |
 | 4 | scope_set | Call scope_set(scope_slug) with valid slug | Returns scope; no error. |
 | 5 | project_get_info | After scope_set, call project_get_info | Returns project or empty; no crash. |
@@ -363,11 +361,8 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | 10 | issue_create | issue_create(title: "Manual issue") | Issue returned; appears in issue_list. |
 | 11 | milestone_create / list | Create milestone; list | Milestone in list. |
 | 12 | release_create / list | Create release; list | Release in list. |
-| 13 | doc_register / doc_list | Register a doc; list | Doc in list. |
-| 14 | doc_read | doc_read with path under project root | Content returned. |
-| 15 | doc_read safety | Try path like "../other" (if possible) | Error, no content from outside root. |
-| 16 | Invalid context | (If client allows) Send request without or with wrong context_key | Error response; no data. |
-| 17 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
+| 13 | Invalid context | (If client allows) Send request without or with wrong context_key | Error response; no data. |
+| 14 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
 
 ### 6.2 Exploratory testing
 
@@ -406,7 +401,7 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | **Production** | Live use | Production DB | Configurable sink; no secrets in logs |
 
 - **Secrets:** Never commit connection strings or API keys. Use env vars or secret store in CI and staging/prod.
-- **Test env vars:** Document in README or CI workflow: e.g. `TEST_DATABASE_URL`, `PROJECT_MCP_ROOT` for doc_read tests.
+- **Test env vars:** Document in README or CI workflow: e.g. `TEST_DATABASE_URL`.
 
 ---
 
@@ -441,8 +436,6 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | asset_* / resource_* / keyword_* | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
 | work_queue_* | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
 | associations & dependencies | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
-| doc_register / doc_list | Handlers | Repository + handler | Optional | Optional in script | Yes |
-| doc_read + path safety | PathResolver only | Optional (real file under root) | Optional | — | Yes (and safety) |
 | Resources (spec/tasks/plan) | — | Handler + store returns correct data | Yes (resource read) | Agent may use resources | Yes |
 | Context key validation | Middleware/handler | Reject invalid key | E2E without key | — | Try invalid key |
 | Logging (correlation_id, no secrets) | — | Optional (assert log props) | — | — | Manual check |

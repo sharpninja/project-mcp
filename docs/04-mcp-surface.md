@@ -52,7 +52,7 @@ Expose current project state so the client can load context without calling tool
 
 | URI | Description |
 |-----|-------------|
-| `project://current/spec` | Project metadata, tech stack, doc list |
+| `project://current/spec` | Project metadata, tech stack |
 | `project://current/tasks` | Full task list |
 | `project://current/plan` | Milestones, releases |
 | `project://current/requirements` | Requirements list for current project |
@@ -80,8 +80,8 @@ Naming: consistent `*_create`, `*_update`, `*_list` (and `*_delete` where applic
 
 ### Project
 
-- **project_get_info** — Return current project metadata (name, description, status, tech stack, docs). Return empty/not-initialized if no project exists.
-- **project_update** — Create or update project: name, description, status, techStack (object), docs (array of { name, path, type, description? }).
+- **project_get_info** — Return current project metadata (name, description, status, tech stack). Return empty/not-initialized if no project exists.
+- **project_update** — Create or update project: name, description, status, techStack (object).
 
 ### Requirements
 
@@ -174,11 +174,5 @@ Naming: consistent `*_create`, `*_update`, `*_list` (and `*_delete` where applic
 - **system_requirement_add** / **system_requirement_remove** — systemId, requirementId, role (included | dependency).
 - **resource_team_member_add** / **resource_team_member_remove** — teamId, memberId.
 - **entity_keyword_add** / **entity_keyword_remove** — entityType, entityId, keywordId.
-
-### Docs
-
-- **doc_register** — Add or update a doc entry (name, path, type, optional description).
-- **doc_list** — List registered docs.
-- **doc_read** — Read file contents by path (relative to project root). Optional; useful so the AI can load doc content via MCP.
 
 All tools return structured results (e.g. JSON) in the tool response content. Errors return a consistent shape (e.g. `{ error: string }`) with `isError: true` where applicable.

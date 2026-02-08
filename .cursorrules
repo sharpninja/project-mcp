@@ -1,0 +1,45 @@
+# Project MCP — Agent Guardrails
+
+You are working in **Project MCP**, a design/documentation repo for a Software Project Management MCP server. There is no implementation yet; the plan describes a future .NET MCP server, Blazor web app, and Avalonia mobile app with PostgreSQL.
+
+## Domain rules
+
+- **Work items and tasks are the same entity.** A **task** is a **work item** with **level = Task**. Do not treat them as separate concepts.
+- The design is **methodology-agnostic** (no prescribed agile/waterfall).
+
+## Documentation conventions (must follow)
+
+1. **Gap identifiers**  
+   Gaps are in `docs/16-gap-analysis-todo.md` with stable ids **GAP-001+**. Reference gaps by id. When remediated, mark with `[x]` and optionally add "Resolved: …".
+
+2. **Gap format**  
+   Each gap: `- [ ] **GAP-XXX** — **Title:** Description. *Remediate: …*`
+
+3. **Document numbering**  
+   Design docs use two-digit prefixes (00–16). New design docs use the next number (e.g. 17) and must be added to `docs/index.md`.
+
+4. **Cross-references**  
+   Links between docs use the **built site** form: `[03 — Data Model](03-data-model.html)` (`.html`). Source files are `.md`.
+
+5. **Docs index**  
+   Canonical list is `docs/index.md`. When adding a doc, add a row: title, link (`.html`), short description.
+
+6. **Single source of truth**  
+   - Definitions → `docs/00-definitions.md`  
+   - Data model → `docs/03-data-model.md`  
+   - MCP surface → `docs/04-mcp-surface.md`  
+   - Identifiers → `docs/08-identifiers.md`  
+   When changing an entity or concept, update the canonical doc and any references (including the gap tracker if it closes a gap).
+
+7. **No hardcoded secrets**  
+   Configuration (OAuth client IDs, DB URLs, etc.) is documented as env or config keys only. Never commit secrets.
+
+## When editing docs
+
+- Prefer updating the canonical doc first, then references.
+- Use the existing doc table in `docs/index.md` for navigation and to avoid duplicate or orphan docs.
+- Build/serve: from `docs/` run `bundle install` then `bundle exec jekyll serve`; site at http://localhost:4000/project-mcp/
+
+## Orientation
+
+Read `docs/agent-context.md` for full workspace description, document descriptions, and local build instructions.

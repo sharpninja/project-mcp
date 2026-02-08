@@ -4,83 +4,32 @@ title: Gap Analysis — Remediation Tracker
 
 # Gap Analysis — Remediation Tracker
 
-This document lists **gaps** in the current design and documentation in **todo format** for tracking remediation. Each gap has a unique **identifier** (e.g. **GAP-001**) so it can be referenced in chat or in other docs. Mark items as completed by changing `[ ]` to `[x]` and optionally adding a "Resolved" note.
+This document lists **gaps** in the design and documentation in **todo format** for tracking remediation. Each gap has a unique **identifier** (e.g. **GAP-001**) so it can be referenced in chat or in other docs. Mark items as completed by changing `[ ]` to `[x]` and optionally adding a "Resolved" note.
 
-**How to use:** Reference a gap by id in conversation (e.g. "fix GAP-003") or link to this doc. When a gap is remediated, check the box and add a short "Resolved: …" line.
+**How to use:** Reference a gap by id (e.g. "fix GAP-003") or link to this doc. When a gap is remediated, check the box and add a short "Resolved: …" line.
 
-**Categories:** Definitions & terms | Data model & schema | Identifiers | MCP surface | Web/Mobile & auth | Implementation plan | Security & compliance | Testing & deployment | Cross-cutting
+**Categories for new gaps:** Definitions & terms | Data model & schema | Identifiers | MCP surface | Web/Mobile & auth | Implementation plan | Security & compliance | Testing & deployment | Cross-cutting. Use **High / Medium / Low** severity as needed.
 
 **Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.
 
 ---
 
-## High severity
+## Open gaps
 
-### Web app, mobile app, and auth
+There are currently **no open gaps**.
 
-None.
+To add a gap: use the next **GAP-XXX** id, follow the format below, add a row to the summary table, and place the item under the appropriate severity (High / Medium / Low) and category.
 
----
+**Format:** `- [ ] **GAP-XXX** — **Title:** Description. *Remediate: …*`
 
-## Medium severity
-
-### Data model and schema
-
-None.
-
-### MCP surface
-
-None.
-
-### Implementation plan
-
-None.
-
-### Security and compliance
-
-None.
-
-### Testing and deployment
-
-None.
-
-### Cross-cutting and docs
-
-None.
-
----
-
-## Low severity
-
-### Identifiers
-
-None.
-
-### Data model and schema
-
-None.
-
-### Security and compliance
-
-None.
-
-### Testing and deployment
-
-None.
-
-### Cross-cutting and docs
-
-None.
+**Resolved example:** `- [x] **GAP-001** — **Title:** … *Remediate: …* Resolved: added to 03 and 08.`
 
 ---
 
 ## Summary by identifier
 
-| ID       | Category        | One-line summary |
-|----------|-----------------|------------------|
-| — | — | No open gaps |
-
----
+| ID | Category | One-line summary |
+|----|----------|-------------------|
+| *(none)* | — | No open gaps |
 
 *Total: 0 gaps. Use this tracker for future additions.*
-

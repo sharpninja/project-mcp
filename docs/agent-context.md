@@ -16,7 +16,7 @@ This file orients an AI agent (or human) working in this repository: what the wo
 - **Documentation tooling**: Jekyll (Ruby) in `docs/` with a custom layout; docs are published to **GitHub Pages** via the `Publish docs to GitHub Pages` workflow.
 - **No implementation yet**: the plan describes a future .NET MCP server, Blazor web app, and Avalonia mobile app backed by PostgreSQL; code will be added when implementation starts.
 
-The design is **methodology-agnostic** (no prescribed agile/waterfall). It covers enterprises, projects, work, work items, tasks, milestones, releases, requirements, issues, docs, standards, keywords, and related entities, with a clear identifier scheme and MCP tool/resource surface.
+The design is **methodology-agnostic** (no prescribed agile/waterfall). It covers enterprises, projects, work, work items, tasks, milestones, releases, requirements, issues, standards, keywords, and related entities, with a clear identifier scheme and MCP tool/resource surface.
 
 **Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.
 
@@ -24,7 +24,7 @@ The design is **methodology-agnostic** (no prescribed agile/waterfall). It cover
 
 ## Constraints and conventions (for agents and edits)
 
-These conventions have been established in this workspace and should be respected when editing or adding content.
+These conventions have been established in this workspace and should be respected when editing or adding content. A formal, single-reference version is in [17 — Guardrails](17-guardrails.html).
 
 1. **Gap identifiers**  
    Gaps are tracked in [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) with stable identifiers **GAP-001+** when needed. Reference gaps by id in chat or in other docs. When a gap is remediated, mark the item with `[x]` and optionally add a "Resolved: …" note.
@@ -58,12 +58,12 @@ These conventions have been established in this workspace and should be respecte
 | [01 — Overview](01-overview.html) | Goal, scope, and high-level concepts; non-goals. |
 | [02 — Architecture](02-architecture.html) | Client, MCP server, PostgreSQL; handshake and scope; web app and mobile app in the architecture. |
 | [03 — Data Model](03-data-model.html) | Full entity set, PostgreSQL tables, relationships, change tracking (session_id, resource_id, correlation_id). Source of truth for schema. |
-| [04 — MCP Surface](04-mcp-surface.html) | Context key, correlation_id, session scope; tools (scope_set/get, enterprise_*, project_*, requirement_*, standard_*, work_item_*, task_*, issue_*, milestone_*, release_*, domain_*, system_*, asset_*, resource_*, keyword_*, work_queue_*, association tools, doc_*); resources (project://current/spec, /tasks, /plan, /requirements, /issues, enterprise://current/resources, work_item://{id}). |
+| [04 — MCP Surface](04-mcp-surface.html) | Context key, correlation_id, session scope; tools (scope_set/get, enterprise_*, project_*, requirement_*, standard_*, work_item_*, task_*, issue_*, milestone_*, release_*, domain_*, system_*, asset_*, resource_*, keyword_*, work_queue_*, association tools); resources (project://current/spec, /tasks, /plan, /requirements, /issues, enterprise://current/resources, work_item://{id}). |
 | [05 — Tech and Implementation](05-tech-and-implementation.html) | Technology choices and implementation order; future integrations. |
 | [06 — Tech Requirements](06-tech-requirements.html) | Runtime, protocol, storage, security, deployment, compatibility; methodology neutrality; configurable logging; Docker and Aspire. |
 | [07 — Deployment](07-deployment.html) | Docker containers, Aspire orchestration, App Host, configuration. |
 | [08 — Identifiers](08-identifiers.html) | GUID + display slug + unique index rules; owner and hierarchy; examples for E, P, REQ, STD, WI (work/work item/task); Domain, System, Asset, Resource; Milestone, Release, Issue, Keyword prefixes. |
-| [09 — Gaps Analysis](09-gaps-analysis.html) | Narrative gap analysis: missing definitions, relationships, schema details, MCP surface. Partially superseded by 16 for tracking (09 says Domain/Asset/Resource not persisted; 03 now has them). |
+| [09 — Gaps Analysis](09-gaps-analysis.html) | Historical snapshot of identified gaps; resolution status per category. Current gap tracking: 16. |
 | [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html) | Activity and sequence diagrams per MCP endpoint. |
 | [11 — Implementation Plan](11-implementation-plan.html) | Phased implementation: Phase 0–12 (MCP server, extended entities, web app + API, mobile app). Task tables with dependencies and deliverables. |
 | [12 — Testing Plan](12-testing-plan.html) | Unit, integration, E2E, manual testing; Cursor agent CLI script test. |

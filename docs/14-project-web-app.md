@@ -85,11 +85,10 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
       - **Work items** (with state, task ordering, work queue)
       - **Tasks** (with sub-tasks and dependencies)
     - **Releases**
-    - **Docs** (registered doc entries)
     - **Sub-projects** (recursive: same structure)
   - **Resources** — Enterprise-level list (people, teams, tools). A resource that is a team can expand to show **members**.
   - **Domains** — Enterprise-level list. Expanding a domain shows **requirements** in that domain (read-only association).
-  - **Assets** — Enterprise-level list (docs, diagrams, media). Optional: expand to show type and thumbnail.
+  - **Assets** — Enterprise-level list (documentation, diagrams, media). Optional: expand to show type and thumbnail.
   - **Standards** — Enterprise-level standards (if any).
   - **Milestones** — Enterprise-level list; expanding shows **requirements** (and inferred projects) tied to that milestone.
   - **Systems** — Enterprise-level list; expanding shows **requirements** (included / dependency).
@@ -105,7 +104,7 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
 ### 4.3 Detail views (summary)
 
 - **Enterprise:** Name, description; links to counts or lists of projects, resources, domains, assets, milestones.
-- **Project:** Name, description, status, tech stack, docs list; tabs or sections for requirements, work, releases, sub-projects.
+- **Project:** Name, description, status, tech stack; tabs or sections for requirements, work, releases, sub-projects.
 - **Requirement:** Title, description, parent/children, domain, milestone, linked work/standards.
 - **Work / Work item / Task:** Title, dates, effort, priority, state, assignee(s), requirements, dependencies, work queue (for work item).
 - **Resource:** Name, description, team members (if team).
@@ -127,7 +126,7 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
 
 ## 6. Full-text search
 
-- **Scope:** Search across **any entity type** (enterprise, project, requirement, standard, work, work item, task, milestone, release, resource, domain, system, asset, issue, doc) over **text fields** (name, title, description, and other searchable attributes).
+- **Scope:** Search across **any entity type** (enterprise, project, requirement, standard, work, work item, task, milestone, release, resource, domain, system, asset, issue) over **text fields** (name, title, description, and other searchable attributes).
 - **Backend:** Use PostgreSQL full-text search:
   - Add (or use) `tsvector` columns / generated columns and GIN indexes on the tables that have searchable text (e.g. `name`, `description`, `title`).
   - Single search query that unions results from multiple entity types, or a dedicated **search** table / view that aggregates searchable text with `entity_type` and `entity_id`.
@@ -185,7 +184,6 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
 ## 10. Additional features (short list)
 
 - **Dashboard (home):** After login or enterprise selection, show a summary: recent activity, my tasks, open issues, milestone deadlines (configurable widgets).
-- **Docs browser:** List registered docs per project; link to `doc_read`-style content (serve file from project root or URN) if available in the web app context.
 - **Exports:** Export progress report or Gantt data (CSV, PDF) as a later enhancement.
 - **Audit / history:** If the schema adds history tables later, show “last changed” and optional history per entity.
 

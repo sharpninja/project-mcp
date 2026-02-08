@@ -10,7 +10,6 @@ Build an MCP server that gives an AI assistant the ability to manage software pr
 
 - **Tasks/issues** — create, list, update, assign, prioritize
 - **Planning** — milestones, releases
-- **Documentation** — register docs (README, ADRs, specs), list, optionally read file contents
 - **Project metadata** — name, description, status
 - **Tech stack** — languages, frameworks, key dependencies
 
@@ -32,9 +31,8 @@ usecaseDiagram
     (Plan milestones/releases) as UC2
     (Manage requirements/work items/tasks) as UC3
     (Track issues) as UC4
-    (Access docs) as UC5
-    (Use work queue) as UC6
-    (Administer enterprises) as UC7
+    (Use work queue) as UC5
+    (Administer enterprises) as UC6
   }
 
   PM --> UC1
@@ -42,18 +40,16 @@ usecaseDiagram
   PM --> UC3
   PM --> UC4
   PM --> UC5
-  PM --> UC6
 
   TM --> UC3
   TM --> UC4
-  TM --> UC6
+  TM --> UC5
 
   AI --> UC1
   AI --> UC2
   AI --> UC3
   AI --> UC4
   AI --> UC5
-  AI --> UC6
 
   SUDO --> UC7
 
@@ -69,7 +65,6 @@ usecaseDiagram
   UC4 --> MCP
   UC5 --> MCP
   UC6 --> MCP
-  UC7 --> MCP
 
   MCP --> DB
   WEB --> MCP
@@ -80,7 +75,7 @@ usecaseDiagram
 
 ## Scope
 
-- **In scope:** Enterprise as top-level ownership; full project management (tasks, planning, docs, metadata, tech stack) under enterprises, with PostgreSQL as the primary store.
+- **In scope:** Enterprise as top-level ownership; full project management (tasks, planning, metadata, tech stack) under enterprises, with PostgreSQL as the primary store.
 - **Out of scope for v1:** Integrations (GitHub, Jira); multi-project or multi-workspace switching; authentication.
 
 ## Methodology neutrality
@@ -95,7 +90,7 @@ An AI agent such as GitHub Copilot or Cursor connects to the Project MCP server 
 
 **Resources** are read-only URIs the agent can subscribe to or fetch to load project state into its context without performing writes.
 
-- **`project://current/spec`** — Project metadata, tech stack, and doc list. The agent uses this to know the project’s name, description, status, and which docs (README, ADRs, specs) exist.
+- **`project://current/spec`** — Project metadata and tech stack. The agent uses this to know the project’s name, description, and status.
 - **`project://current/tasks`** — Full task list. The agent uses this to answer “what tasks are there?”, “what’s in progress?”, or to reason about workload before creating or updating tasks.
 - **`project://current/plan`** — Milestones and releases. The agent uses this to answer “what’s in this milestone?” or “when is the next release?” and to link tasks to milestones/releases.
 
@@ -105,25 +100,22 @@ The agent typically fetches or subscribes to these resources when the user’s q
 
 **Tools** are operations the agent calls to change or query data. The agent maps user intent to one or more tool calls and returns the tool results (or an error) to the user.
 
-- **Project** — `project_get_info` to read metadata; `project_update` to create or change the project (name, description, status, tech stack, docs).
+- **Project** — `project_get_info` to read metadata; `project_update` to create or change the project (name, description, status, tech stack).
 - **Tasks** — `task_create`, `task_update`, `task_list`, `task_delete` so the agent can add tasks, change status/assignee/priority, list/filter tasks, or remove them.
 - **Planning** — `milestone_create` / `milestone_update` / `milestone_list`, `release_create` / `release_update` / `release_list` so the agent can manage milestones and releases and associate work with them.
-- **Docs** — `doc_register` to add or update a doc entry; `doc_list` to list docs; `doc_read` to read file contents (e.g. README or an ADR) so the agent can use doc content in its reasoning or answers.
 
-The agent chooses tools based on the user’s request (e.g. “Add a task to fix the login bug” → `task_create`; “Mark task X done” → `task_update`; “What does the spec say about auth?” → `doc_read` or `project://current/spec` plus `doc_read` if it needs the file body).
+The agent chooses tools based on the user’s request (e.g. “Add a task to fix the login bug” → `task_create`; “Mark task X done” → `task_update`).
 
 ### Typical flows
 
 1. **“What’s going on with the project?”** — Agent fetches `project://current/spec`, `project://current/tasks`, and optionally `project://current/plan`, then summarizes.
 2. **“Add a task: Implement password reset”** — Agent calls `task_create` with title (and optional description, status, priority, assignee, milestone/release); may call `task_list` or resources afterward to confirm or show the new task.
 3. **“What’s in the Beta milestone?”** — Agent fetches `project://current/plan` (or uses `milestone_list`), then `project://current/tasks` or `task_list` filtered by milestone, and lists tasks in that milestone.
-4. **“Update the README”** — Agent might use `doc_read` to get current content, then (outside MCP) suggest or apply edits; it can use `doc_register` to register or update the doc entry if the path or metadata changes.
-5. **“Get next work item and begin work”** — Agent calls `work_queue_get` to receive the next work item (returned as a prompt); it **subscribes to `work_item://{id}` for the work item and its child items**, then begins processing the prompt, creating or updating child work items/tasks as needed.
-6. **“Get next five work items”** — Agent calls `work_queue_get` with **count = 5** and returns the first five work items or tasks in the queue.
-7. **“Get next five tasks”** — Agent calls `work_queue_get` with **count = 5** to get the queued work items, then **walks each work item’s queue** (another `work_queue_get`) to retrieve task-level items (level = Task).
-8. **“Mark work complete”** — Agent calls `work_item_update` with the work item **slug** and sets **state = Complete**; the completed item no longer appears in `work_queue_get`.
-9. **“Mark task complete”** — Agent calls `work_item_update` with the task **slug** and sets **status = done** (task = work item with level = Task).
-10. **“Read the architecture decision for auth”** — Agent uses `doc_list` to find the relevant ADR, then `doc_read` with that path to load the content and answer.
+4. **“Get next work item and begin work”** — Agent calls `work_queue_get` to receive the next work item (returned as a prompt); it **subscribes to `work_item://{id}` for the work item and its child items**, then begins processing the prompt, creating or updating child work items/tasks as needed.
+5. **“Get next five work items”** — Agent calls `work_queue_get` with **count = 5** and returns the first five work items or tasks in the queue.
+6. **“Get next five tasks”** — Agent calls `work_queue_get` with **count = 5** to get the queued work items, then **walks each work item’s queue** (another `work_queue_get`) to retrieve task-level items (level = Task).
+7. **“Mark work complete”** — Agent calls `work_item_update` with the work item **slug** and sets **state = Complete**; the completed item no longer appears in `work_queue_get`.
+8. **“Mark task complete”** — Agent calls `work_item_update` with the task **slug** and sets **status = done** (task = work item with level = Task).
 
 ### Example: requirement → work breakdown
 
@@ -136,9 +128,8 @@ User prompt: **“Add requirement to implement a todo list and assign the work t
 3. **work_item_requirement_add** — Link the parent work item to the requirement.
 4. **work_item_create** — Create a **planning work item** (level = Work) as a child of the parent (parentId = parent work item).
 5. **work_item_create** — Create **planning tasks** (level = Task) under the planning work item (e.g. “Create implementation plan”, “Write plan markdown”).
-6. **doc_register** — Register the plan file (e.g. `docs/plan.md`) after the agent writes it in the repo.
-7. **work_item_create** — Create an **implementation work item** (level = Work) as another child of the parent, with child tasks (level = Task) for coding steps.
-8. **work_item_create** — Create a **testing work item** (level = Work) as another child of the parent, with child tasks (level = Task) for unit/integration tests.
+6. **work_item_create** — Create an **implementation work item** (level = Work) as another child of the parent, with child tasks (level = Task) for coding steps.
+7. **work_item_create** — Create a **testing work item** (level = Work) as another child of the parent, with child tasks (level = Task) for unit/integration tests.
 
 This yields a single requirement linked to a parent work item, with second-level work items for planning, implementation, and testing, each with task-level children.
 

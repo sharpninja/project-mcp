@@ -26,7 +26,7 @@ flowchart LR
   Postgres -.-> Future
 ```
 
-- **Tools** — Actions: create/update task, milestone, release; update project; register doc; list/read docs.
+- **Tools** — Actions: create/update task, milestone, release; update project.
 - **Resources** — Read-only project state (e.g. `project://current/spec`, `project://current/tasks`, `project://current/plan`). The client can subscribe or poll these.
 - **Storage** — PostgreSQL as the primary store. Later, adapters (e.g. GitHub Projects/Issues) can be added behind a store interface for sync or alternative backends.
 
@@ -78,7 +78,7 @@ flowchart TB
 ## Project root
 
 - **Enterprise** is the top-level hierarchy (ownership of projects and resources). One or more projects belong to an enterprise; the server may be scoped to one enterprise or one project per connection/config. See [00 — Definitions](00-definitions.html).
-- **Project root** (optional): environment variable (e.g. `PROJECT_MCP_ROOT`) or process current working directory. Used for **doc_read** (resolving file paths in the repo) and for any file-based concerns. Project *data* (tasks, milestones, etc.) lives in PostgreSQL.
+- **Project root** (optional): environment variable (e.g. `PROJECT_MCP_ROOT`) or process current working directory, for any file-based concerns. Project *data* (tasks, milestones, etc.) lives in PostgreSQL.
 
 ## Backend abstraction (future)
 

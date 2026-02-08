@@ -51,9 +51,9 @@ The MCP server is **stdio-based** for v1. When run in a container, the host (e.g
    - From repo root: `dotnet ef database update --project src/ProjectMcp.Server` (or your server project path).
    - Or run migrations programmatically on startup (optional for dev).
 
-### 3.2 Project root (for doc_read)
+### 3.2 Project root (optional)
 
-- Optional: `export PROJECT_MCP_ROOT=/path/to/your/repo` (or leave unset to use process cwd).
+- Optional: `export PROJECT_MCP_ROOT=/path/to/your/repo` (or leave unset to use process cwd) for any file-based operations.
 
 ### 3.3 Default scope (optional)
 
@@ -206,7 +206,7 @@ docker run --rm -e ConnectionStrings__DefaultConnection="Host=host.docker.intern
 - **Deploy:** Same container image as tested in staging; only configuration and secrets differ.
 - **Config (env):**
   - `ConnectionStrings__DefaultConnection` or `DATABASE_URL` — production Postgres (from secret store).
-  - `PROJECT_MCP_ROOT` — if doc_read is used; must be a safe path on the host/volume.
+  - `PROJECT_MCP_ROOT` — optional; must be a safe path on the host/volume if used.
   - `PROJECT_MCP_ENTERPRISE_ID` / `PROJECT_MCP_PROJECT_ID` — optional default scope.
   - Serilog / logging: configurable sink URL (e.g. from env); no secrets in logs.
 - **Secrets:** Injected at deploy time (e.g. Kubernetes secrets, Docker secrets, or env from vault). Never in image or repo.
@@ -225,7 +225,7 @@ docker run --rm -e ConnectionStrings__DefaultConnection="Host=host.docker.intern
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `ConnectionStrings__DefaultConnection` or `DATABASE_URL` or `PROJECT_MCP_CONNECTION_STRING` | Yes | PostgreSQL connection string | `Host=localhost;Database=projectmcp;Username=...;Password=...` |
-| `PROJECT_MCP_ROOT` | No | Project root for doc_read; default = cwd | `/repo` |
+| `PROJECT_MCP_ROOT` | No | Optional project root; default = cwd | `/repo` |
 | `PROJECT_MCP_ENTERPRISE_ID` | No | Default enterprise for scope | GUID or slug |
 | `PROJECT_MCP_PROJECT_ID` | No | Default project for scope | GUID or slug |
 | Serilog / logging sink | No | Configurable logging (e.g. `SERILOG__WRITE_TO`, sink URL) | Seq, Application Insights, etc. |
