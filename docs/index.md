@@ -10,6 +10,7 @@ Design and documentation for the Software Project Management MCP server.
 
 | Doc | Description |
 |-----|-------------|
+| [Agent Context](agent-context.html) | Workspace overview, conventions, doc index, build/serve instructions |
 | [00 — Definitions](00-definitions.html) | Canonical terms (Enterprise, Project, Requirement, etc.) |
 | [01 — Overview](01-overview.html) | Goal, scope, and high-level concepts |
 | [02 — Architecture](02-architecture.html) | Client, MCP server, storage |
@@ -26,3 +27,4 @@ Design and documentation for the Software Project Management MCP server.
 | [13 — Deployment Plan](13-deployment-plan.html) | Local, Docker, Aspire, CI/CD, rollback |
 | [14 — Project Web App](14-project-web-app.html) | Blazor (.NET 10) website: tree, search, reports, Gantt, issues; Docker |
 | [15 — Mobile App](15-mobile-app.html) | Avalonia UI phone app: OAuth2, task queue for assigned work items |
+| [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) | Remediation tracker: gaps with identifiers (GAP-001 … GAP-038) in todo format |

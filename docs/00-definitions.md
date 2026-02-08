@@ -10,14 +10,14 @@ Canonical terms used in the design. **Methodology neutrality:** These definition
 
 **Enterprise** — The top-level hierarchy representing ownership of projects and resources.
 
-- All projects and their resources (tasks, milestones, releases, docs) are owned by an enterprise.
+- All projects and their resources (tasks, milestones) are owned by an enterprise.
 - The enterprise is the scope for ownership, billing, or tenant isolation when multiple organizations use the system.
 - In the data model, projects reference an enterprise (e.g. `enterprise_id`); the enterprise is the root of the hierarchy.
 - **Enterprise records can only be added by a user with the SUDO role.** The SUDO role is an authorization role (e.g. assigned via token claims or an app-defined role mapping); see [14 — Project Web App](14-project-web-app.html).
 
 ## Project
 
-**Project** — A collection of requirements, standards, work, and sub-projects. Projects belong to an enterprise and contain metadata, tech stack, docs (including standards), tasks and planning (work), and optionally child projects (sub-projects). See [03 — Data Model](03-data-model.html).
+**Project** — A collection of requirements, standards, work, and sub-projects. Projects belong to an enterprise and contain metadata, tech stack, standards, tasks and planning (work), and optionally child projects (sub-projects). See [03 — Data Model](03-data-model.html).
 
 ## Requirement
 
@@ -27,17 +27,17 @@ Canonical terms used in the design. **Methodology neutrality:** These definition
 
 **Standard** — How requirements must be accomplished. Standards define the rules, criteria, or methods that work must follow when fulfilling requirements (e.g. coding standards, security or compliance rules, documentation formats). Standards are assigned to either **Enterprises** or **Projects** (enterprise-level standards apply across the enterprise; project-level standards apply to that project and optionally its sub-projects).
 
-## Work
+## Work (work item)
 
-**Work** — Defines one or more tasks and/or work items to complete, with planning and sizing attributes. Work is the execution layer: resources (e.g. people, teams) perform these tasks and work items to satisfy project requirements via standards. Each work entity has: **deadline**, **start date**, **effort in hours**, **complexity level** (1 to 5, 5 being highest), and **priority** (1 to 5, 5 being highest). Work contains one or more tasks and/or work items. See [03 — Data Model](03-data-model.html).
+**Work** and **work item** are the same concept. A single entity represents both: items under a project (top-level) or under another work item, with a **Level** field **`Work`** or **`Task`**. A single table (e.g. `work_items`) stores all of them; each row has **level** = `Work` or `Task` and **project_id** (for top-level items) or **parent_id** (for children). **Level = Work** items can have planning attributes (**deadline**, **start date**, **effort in hours**, **complexity** 1–5, **priority** 1–5), the same **states** as milestones (Planning, Implementation, Deployment, Validation, Approval, Complete), a **work queue**, and **task_ordering** for children. **Level = Task** items are leaf execution units with **status** (todo, in-progress, done, cancelled) and can link directly to requirements. Both levels can link to requirements. When the parent is another item with Level = Work, the child is **sub-work** (see [Sub-work](#sub-work)). Assignment, blocking, and slug rules apply to all items. See [03 — Data Model](03-data-model.html) and [08 — Identifiers](08-identifiers.html).
 
-## Work item
+## Sub-work
 
-**Work item** — A child of work that groups tasks (and optionally references to other work) and defines how they are ordered or run in parallel. Work items have the same **states** as milestones: Planning, Implementation, Deployment, Validation, Approval, Complete. Each work item has a **work queue** that lists work and tasks in the order they are to be completed; tasks at equal queue depth are grouped as a single work queue item. Work queues can be filtered by resource (e.g. to show only items for a given assignee). **If a work item is assigned to one or more resources, all tasks and sub-work under it are also assigned to that resource.** Work and tasks can be unassigned or reassigned to a different resource. **Unassigned work or tasks that have dependent work or tasks become blockers** to those dependent items, even if the dependent items are assigned to a resource. See [03 — Data Model](03-data-model.html).
+**Sub-work** — An item with **Level = `Work`** whose parent is another work item (i.e. **parent_id** is set to an item with level = Work, not a top-level item under the project). Sub-work inherits assignment and blocking rules from its parent work item. See [Work (work item)](#work-work-item) and [03 — Data Model](03-data-model.html).
 
 ## Task
 
-**Task** — An assignment to be completed by one or more resources to implement, test, or plan some aspect of one or more requirements, with an expected budget of time per resource. **Tasks are owned by work items or other tasks** (for hierarchy and display id). Tasks link to requirements and to resources (assignees); the time budget is tracked per resource. **Tasks can be dependent on other tasks** (e.g. task B cannot start until task A is complete). **Within a work item, tasks may be ordered** (completed in a defined sequence) **or allowed to be completed in parallel**. See [03 — Data Model](03-data-model.html) and [08 — Identifiers](08-identifiers.html) (prefix TSK, six-digit zero-padded index).
+**Task** — An item with **Level = `Task`**. An assignment to be completed by one or more resources to implement, test, or plan some aspect of one or more requirements, with an expected budget of time per resource. Tasks are **owned by a project** (top-level) **or by another item** (work item or task) for hierarchy and display id. **Tasks link directly to requirements** (same requirement-association table as work items). Tasks can be **dependent on other tasks** (e.g. task B cannot start until task A is complete). Within a work item (level = Work), tasks may be **ordered** (defined sequence) **or allowed in parallel**. See [03 — Data Model](03-data-model.html) and [08 — Identifiers](08-identifiers.html).
 
 ## Milestone
 
@@ -54,6 +54,10 @@ Canonical terms used in the design. **Methodology neutrality:** These definition
 ## System
 
 **System** — A collection of one or more related requirements. Systems **belong to exactly one enterprise** and have a **unique name within that enterprise**. The system's slug is built the same as a domain: **enterprise slug**, hyphen, then the **name** (e.g. `E1-payment-api`). A requirement may be associated with a system **either as included in the system** (part of the system) **or as a dependency of the system** (the system depends on that requirement). Systems can be categorized as **Application**, **Framework**, **API**, or **Compound** (unions of the other categories). See [03 — Data Model](03-data-model.html) and [08 — Identifiers](08-identifiers.html).
+
+## Open work
+
+**Open work** — Work items that have not been completed. A work item is **open** when its state is not **Complete**; once its state is Complete, it is no longer open work. Used for issue association: an issue linked to a requirement is linked to a work item (and its assignee) when there is open work on that requirement. See [Work (work item)](#work-work-item) and [03 — Data Model](03-data-model.html).
 
 ## Issue
 

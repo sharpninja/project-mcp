@@ -4,6 +4,8 @@ MCP for managing software projects: tasks, planning, docs, metadata, and tech st
 
 ## Documentation
 
+**[Agent context](docs/agent-context.md)** — Workspace overview, conventions, table of contents for all design docs, and how to build and serve the docs locally (for contributors and AI agents).
+
 The docs are published as a **GitHub Pages** site (Jekyll with Mermaid diagrams). After the first push, enable Pages: **Settings → Pages → Source: GitHub Actions**. The site will be at `https://sharpninja.github.io/project-mcp/`.
 
 - [00 — Definitions](docs/00-definitions.md) — Enterprise, project, and other canonical terms
