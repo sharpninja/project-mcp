@@ -1,7 +1,7 @@
 title: Project MCP
 description: Software Project Management MCP — design and documentation
-baseurl: ""
-url: ""
+baseurl: "/project-mcp"
+url: "https://sharpninja.github.io"
 
 markdown: kramdown
 highlighter: rouge
