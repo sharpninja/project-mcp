@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Jekyll
+_site/
+.jekyll-cache/
+.jekyll-metadata
+
+# Env / IDE
+.env
+.env.local
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / logs
+dist/
+*.log
+npm-debug.log*

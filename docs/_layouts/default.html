@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title }} — {% endif %}{{ site.title }}</title>
+  <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrapper">
+      <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+      <nav class="site-nav">
+        <a href="{{ '/' | relative_url }}">Docs</a>
+      </nav>
+    </div>
+  </header>
+  <main class="page-content">
+    <div class="wrapper">
+      <article class="post">
+        <header class="post-header">
+          <h1 class="post-title">{{ page.title | default: "Documentation" }}</h1>
+        </header>
+        <div class="post-content">
+          {{ content }}
+        </div>
+      </article>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrapper">
+      <p>Project MCP design documentation</p>
+    </div>
+  </footer>
+  <script>
+    mermaid.initialize({ theme: 'default', securityLevel: 'loose' });
+    document.querySelectorAll('pre code.language-mermaid').forEach(function(el) {
+      var pre = el.parentElement;
+      var div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = el.textContent;
+      pre.parentNode.replaceChild(div, pre);
+    });
+    mermaid.run();
+  </script>
+</body>
+</html>
