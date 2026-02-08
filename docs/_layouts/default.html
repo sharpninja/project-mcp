@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if page.title %}{{ page.title }} — {% endif %}{{ site.title }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown.min.css">
   <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 </head>
@@ -22,7 +23,7 @@
         <header class="post-header">
           <h1 class="post-title">{{ page.title | default: "Documentation" }}</h1>
         </header>
-        <div class="post-content">
+        <div class="post-content markdown-body">
           {{ content }}
         </div>
       </article>
