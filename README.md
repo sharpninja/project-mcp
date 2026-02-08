@@ -4,6 +4,8 @@ MCP for managing software projects: tasks, planning, docs, metadata, and tech st
 
 ## Documentation
 
+The docs are published as a **GitHub Pages** site (Jekyll with Mermaid diagrams). After the first push, enable Pages: **Settings → Pages → Source: GitHub Actions**. The site will be at `https://sharpninja.github.io/project-mcp/`.
+
 - [00 — Definitions](docs/00-definitions.md) — Enterprise, project, and other canonical terms
 - [01 — Overview](docs/01-overview.md) — Goal, scope, non-goals
 - [02 — Architecture](docs/02-architecture.md) — High-level diagram, project root, future backend abstraction
