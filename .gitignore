@@ -385,6 +385,7 @@ _site/
 .jekyll-cache/
 .jekyll-metadata
 vendor/
+.bundle/
 
 # OS
 .DS_Store
