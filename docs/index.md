@@ -27,4 +27,6 @@ Design and documentation for the Software Project Management MCP server.
 | [13 — Deployment Plan](13-deployment-plan.html) | Local, Docker, Aspire, CI/CD, rollback |
 | [14 — Project Web App](14-project-web-app.html) | Blazor (.NET 10) website: tree, search, reports, Gantt, issues; Docker |
 | [15 — Mobile App](15-mobile-app.html) | Avalonia UI phone app: OAuth2, task queue for assigned work items |
-| [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) | Remediation tracker: gaps with identifiers (GAP-001 … GAP-038) in todo format |
+| [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) | Remediation tracker (currently no open gaps) |
+
+**Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.

@@ -18,6 +18,8 @@ This file orients an AI agent (or human) working in this repository: what the wo
 
 The design is **methodology-agnostic** (no prescribed agile/waterfall). It covers enterprises, projects, work, work items, tasks, milestones, releases, requirements, issues, docs, standards, keywords, and related entities, with a clear identifier scheme and MCP tool/resource surface.
 
+**Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.
+
 ---
 
 ## Constraints and conventions (for agents and edits)
@@ -25,7 +27,7 @@ The design is **methodology-agnostic** (no prescribed agile/waterfall). It cover
 These conventions have been established in this workspace and should be respected when editing or adding content.
 
 1. **Gap identifiers**  
-   Gaps are tracked in [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) with stable identifiers **GAP-001** through **GAP-038**. Reference gaps by id in chat or in other docs (e.g. "fix GAP-005" or "see GAP-027"). When a gap is remediated, mark the item with `[x]` and optionally add a "Resolved: …" note.
+   Gaps are tracked in [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) with stable identifiers **GAP-001+** when needed. Reference gaps by id in chat or in other docs. When a gap is remediated, mark the item with `[x]` and optionally add a "Resolved: …" note.
 
 2. **Gap and remediation format**  
    Each gap is written as a todo: `- [ ] **GAP-XXX** — **Title:** Description. *Remediate: …*` so progress can be tracked by toggling the checkbox.
@@ -52,23 +54,23 @@ These conventions have been established in this workspace and should be respecte
 | Doc | Description |
 |-----|-------------|
 | [Index](index.html) | Documentation hub: table of all design docs with links. Start here for navigation. |
-| [00 — Definitions](00-definitions.html) | Canonical terms: Enterprise, Project, Requirement, Work (work item; same concept), Task, Milestone, Domain, System, Asset, Resource, Issue, Keyword, Standard. SUDO and scope rules. No Release or Doc yet (see gap tracker). |
+| [00 — Definitions](00-definitions.html) | Canonical terms: Enterprise, Project, Requirement, Work (work item; same concept), Task, Milestone, Domain, System, Asset, Resource, Issue, Keyword, Standard. SUDO and scope rules. |
 | [01 — Overview](01-overview.html) | Goal, scope, and high-level concepts; non-goals. |
 | [02 — Architecture](02-architecture.html) | Client, MCP server, PostgreSQL; handshake and scope; web app and mobile app in the architecture. |
 | [03 — Data Model](03-data-model.html) | Full entity set, PostgreSQL tables, relationships, change tracking (session_id, resource_id, correlation_id). Source of truth for schema. |
-| [04 — MCP Surface](04-mcp-surface.html) | Context key, correlation_id, session scope; tools (scope_set/get, project_*, task_*, milestone_*, release_*, doc_*); resources (project://current/spec, /tasks, /plan). |
+| [04 — MCP Surface](04-mcp-surface.html) | Context key, correlation_id, session scope; tools (scope_set/get, enterprise_*, project_*, requirement_*, standard_*, work_item_*, task_*, issue_*, milestone_*, release_*, domain_*, system_*, asset_*, resource_*, keyword_*, work_queue_*, association tools, doc_*); resources (project://current/spec, /tasks, /plan, /requirements, /issues, enterprise://current/resources, work_item://{id}). |
 | [05 — Tech and Implementation](05-tech-and-implementation.html) | Technology choices and implementation order; future integrations. |
 | [06 — Tech Requirements](06-tech-requirements.html) | Runtime, protocol, storage, security, deployment, compatibility; methodology neutrality; configurable logging; Docker and Aspire. |
 | [07 — Deployment](07-deployment.html) | Docker containers, Aspire orchestration, App Host, configuration. |
-| [08 — Identifiers](08-identifiers.html) | GUID + display slug + unique index rules; owner and hierarchy; examples for E, P, REQ, STD, WI (work/work item/task); Domain, System, Asset, Resource. Milestone, Release, Issue, Doc slug/prefix not yet specified (see gap tracker). |
+| [08 — Identifiers](08-identifiers.html) | GUID + display slug + unique index rules; owner and hierarchy; examples for E, P, REQ, STD, WI (work/work item/task); Domain, System, Asset, Resource; Milestone, Release, Issue, Keyword prefixes. |
 | [09 — Gaps Analysis](09-gaps-analysis.html) | Narrative gap analysis: missing definitions, relationships, schema details, MCP surface. Partially superseded by 16 for tracking (09 says Domain/Asset/Resource not persisted; 03 now has them). |
 | [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html) | Activity and sequence diagrams per MCP endpoint. |
-| [11 — Implementation Plan](11-implementation-plan.html) | Phased implementation: Phase 0 (scaffold), 1 (DB, migrations, repos), 2 (session, scope), 3 (resources), 4–7 (tools), 8 (logging), 9 (GitHub OAuth2). Task tables with dependencies and deliverables. |
+| [11 — Implementation Plan](11-implementation-plan.html) | Phased implementation: Phase 0–12 (MCP server, extended entities, web app + API, mobile app). Task tables with dependencies and deliverables. |
 | [12 — Testing Plan](12-testing-plan.html) | Unit, integration, E2E, manual testing; Cursor agent CLI script test. |
 | [13 — Deployment Plan](13-deployment-plan.html) | Local, Docker, Aspire, CI/CD, rollback. |
 | [14 — Project Web App](14-project-web-app.html) | Blazor (.NET 10) web app: tree, search, reports, Gantt, issues; OAuth2 (GitHub), claims, SUDO; Docker. |
 | [15 — Mobile App](15-mobile-app.html) | Avalonia UI phone app: OAuth2, task queue for assigned work items; same API and data model as web app. |
-| [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) | Remediation tracker: 38 gaps (GAP-001 … GAP-038) in todo format with categories and a summary table. Use for closing gaps and referencing by id. |
+| [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) | Remediation tracker (currently no open gaps). Use for future gaps and referencing by id. |
 
 ---
 

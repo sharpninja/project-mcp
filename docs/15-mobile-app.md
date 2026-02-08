@@ -12,7 +12,7 @@ This document defines a **mobile application** in **phone form factor** built wi
 
 - **Purpose:** Give users a **phone-sized** UI to view and act on **work items and tasks assigned to them** — a personal **task queue** — without opening the web app or MCP.
 - **Users:** Team members and resources who need to see their assigned work, reorder or update tasks, and move work items through states (e.g. Planning → Implementation → Complete) from their phone.
-- **Scope:** Centered on **assigned work**: work items and tasks where the current user (or a team they belong to) is the assigned resource. Full tree navigation, reports, and Gantt are out of scope; the mobile app is a focused “my work” experience.
+- **Scope:** Centered on **assigned work**: work items and tasks where the current user (or a team they belong to) is the assigned resource. **Work items and tasks are the same entity** (task = work item with level = Task). Full tree navigation, reports, and Gantt are out of scope; the mobile app is a focused “my work” experience.
 - **Authentication:** Users sign in with **GitHub** as the OAuth2 provider (same as the web app). Visibility is **claims-based**: the user only sees work assigned to them (or to a team they are a member of), within enterprises/projects allowed by their token claims.
 
 ---
@@ -34,12 +34,13 @@ This document defines a **mobile application** in **phone form factor** built wi
 - **GitHub as OAuth2 provider:** The mobile app uses **GitHub** as the OAuth2 provider (same as the web app). Configuration uses GitHub OAuth App **client id**, **redirect URI**, and **scopes**; for native/mobile, use **PKCE** (no client secret). Register the app as a GitHub OAuth App with a callback URL for the mobile scheme (e.g. myapp://callback).
 - **Flow:** User opens app → sign-in screen → redirect or in-app browser to **GitHub** → user signs in and authorizes → GitHub redirects back with authorization code → app exchanges code (with PKCE) for access token. App stores the token securely (e.g. secure storage / keychain); access token is sent with every API request in the `Authorization` header.
 - **Claims:** The **same claims** model as the web app applies: GitHub user identity plus **app-defined** enterprise/project scope (from the API after validating the GitHub token). The API restricts which work items and tasks are returned (only those in allowed projects and assigned to the user or their teams). The current user’s **resource** is resolved by matching the **GitHub user id** (from the token or GitHub API) to a resource’s **oauth2_sub** in the [data model](03-data-model.html). The API uses that resource (and any teams the resource belongs to) to filter “assigned to me” for the task queue.
+- **MCP agent identity:** MCP clients (Copilot/Cursor) must resolve their agent name to a **Resource** in the enterprise; otherwise requests return **Unauthorized. Agent not approved for Enterprise** (see [04 — MCP Surface](04-mcp-surface.html)).
 
 ---
 
 ## 4. Task queue UI
 
-- **Concept:** The user sees a **task queue** of work items and tasks **assigned to them** (or to a team they belong to). The queue reflects the [work queue](03-data-model.html) ordering where applicable: within a work item, items are ordered by `work_queue_items.position`; tasks at the same position can be grouped (e.g. “these can be done in parallel”). The mobile app may show a **flat list** of “my next items” aggregated across work items, or a **grouped view** (e.g. by work item, then queue order).
+- **Concept:** The user sees a **task queue** of work items and tasks **assigned to them** (or to a team they belong to). The queue reflects the [work queue](03-data-model.html) ordering where applicable: within a work item, items are ordered by `work_queue_items.position`; tasks at the same position can be grouped (e.g. “these can be done in parallel”). **Assignment rule:** direct user assignment takes precedence over team assignment; if both exist, show the item once. The mobile app may show a **flat list** of “my next items” aggregated across work items, or a **grouped view** (e.g. by work item, then queue order).
 - **Contents:** Each entry in the queue represents either:
   - A **task** assigned to the user (title, status, priority, optional due date, work item and project context), or
   - A **work** entity assigned to the user (if the data model exposes work-level assignments in the queue),
@@ -67,10 +68,10 @@ This document defines a **mobile application** in **phone form factor** built wi
 
 - The mobile app **does not** talk to PostgreSQL or MCP directly. It calls an **HTTP API** that:
   - **Authenticates** each request with the OAuth2 **access token** (e.g. Bearer token).
-  - **Resolves** the user’s identity and allowed scope from the token (same claims as web app).
+  - **Resolves** the user’s identity and allowed scope from the token (same claims as web app); requires **scope_slug** on scoped requests.
   - **Validates enterprise scope on every request:** Any data requested or submitted must be within the enterprise(s) the user is associated with. The API rejects and **logs** any attempt to access or modify data of another enterprise; such attempts are **followed up manually**. See [06 — Tech Requirements](06-tech-requirements.html) (Security and safety).
   - **Returns** the user’s task queue: work items and tasks where `resource_id` equals the user’s resource (or a team they are in), restricted to allowed enterprises/projects, with ordering (e.g. by work item and `work_queue_items.position`, or by task due date/priority).
-  - **Accepts** updates: e.g. PATCH task (status, optional fields), PATCH work item (state). All updates are validated and scoped (user can only update items assigned to them within their claimed scope). Creation of **enterprise** records is restricted to users with the **SUDO** role (see [14 — Project Web App](14-project-web-app.html)); the API enforces this for any client.
+  - **Accepts** updates: e.g. PATCH task (status, optional fields), PATCH work item (state). All updates are validated and scoped (user can only update items assigned to them within their claimed scope). Creation of **enterprise** records is restricted to users with the **SUDO** role (allowlist from `PROJECT_MCP_SUDO_GITHUB_IDS`); the API enforces this for any client.
 - This API may be the **same** as the one used by the Blazor web app (e.g. ASP.NET Core controllers or minimal API); the mobile app is just another client using the same endpoints and auth.
 
 ---

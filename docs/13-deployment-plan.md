@@ -57,7 +57,7 @@ The MCP server is **stdio-based** for v1. When run in a container, the host (e.g
 
 ### 3.3 Default scope (optional)
 
-- To avoid calling scope_set every time: `export PROJECT_MCP_ENTERPRISE_ID=<guid>` and/or `export PROJECT_MCP_PROJECT_ID=<guid>`.
+- To avoid calling scope_set every time: `export PROJECT_MCP_SCOPE_SLUG=<slug>` (e.g. `E1-P001`).
 
 ### 3.4 Run the server
 
@@ -72,7 +72,7 @@ dotnet run --project src/ProjectMcp.Server
 ### 3.5 Verification
 
 - Server prints nothing to stdout except MCP protocol messages (or minimal bootstrap log if configured).
-- From Cursor: tools and resources appear; scope_set and project_get_info succeed after setting scope or using default.
+- From Cursor: tools and resources appear; scope_set (scope_slug) and project_get_info succeed after setting scope or using default.
 
 ---
 

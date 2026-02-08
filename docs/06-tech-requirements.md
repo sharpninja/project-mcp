@@ -28,7 +28,7 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 
 - **Backend** — PostgreSQL. Required for v1.
 - **Connection** — Configured via environment (e.g. `DATABASE_URL`, `PROJECT_MCP_CONNECTION_STRING`, or `ConnectionStrings__DefaultConnection`). No hardcoded connection strings.
-- **Schema** — Tables for project (metadata, tech stack, docs), tasks, milestones, releases. UTF-8 encoding. Use standard PostgreSQL types; JSONB acceptable for tech stack, labels, or doc list if preferred.
+- **Schema** — Tables for project (metadata, tech stack, docs), work_items (**level = Work | Task; tasks are level = Task**), milestones, releases. UTF-8 encoding. Use standard PostgreSQL types; JSONB acceptable for tech stack, labels, or doc list if preferred.
 - **Change tracking** — **Change tracking must be enabled on all fields of all entities** in the database. Every insert, update, and delete to entity data must be recorded (e.g. via audit tables, triggers, or application-level logging) so that what changed, when, and optionally by whom can be determined. Each change record must include the **session identifier**, **resource identifier**, and **correlation id** of the request (when available). No entity or field may be excluded. See [03 — Data Model](03-data-model.html) (Change tracking).
 - **Scope** — Single logical project per server process (or per connection) in v1; optional project_id on tables for future multi-project support.
 - **Project root** — Optional env (e.g. `PROJECT_MCP_ROOT`) or process cwd. Used only for **doc_read** (file paths in the repo); not for storing project data.
@@ -49,11 +49,14 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 - **Non-blocking async writes** — Writes to the logging service must be **non-blocking async calls**. The application workflow must not wait on the logging provider’s completion; logging must not add latency to request handling or tool execution.
 - **Local buffer and queue** — Use a **local buffer** to **queue log submissions** so that workflow is **decoupled from logging**. The application enqueues log events to an in-process buffer (e.g. a bounded queue or Serilog async sink); a background writer or sink drains the buffer and sends to the logging provider asynchronously. This keeps the hot path non-blocking and isolates the workflow from provider slowness or transient failures.
 - **No secrets in logs** — Logging must not emit secrets (connection strings, tokens, or other sensitive data). Structured properties should be safe for the configured provider.
+- **Retention** — Recommended retention: **90 days** for routine logs and **1 year** for cross-enterprise access attempts (or per enterprise policy if stricter).
 
 ## Security and safety
 
 - **Enterprise scope on every endpoint** — Every endpoint (MCP tools and resources, web app and API) must **check that any data requested or submitted is within the enterprise(s) the user or agent is associated with**. For reads: return only data whose enterprise_id (or project’s enterprise_id) is in the session’s or user’s allowed enterprises. For writes: reject requests that would create or modify data in another enterprise. Do not rely on the client to restrict scope; enforce in the backend on every call.
+- **MCP agent identity** — The MCP client name (e.g. “cursor”, “copilot”) **must resolve to a Resource** in the enterprise. If no matching Resource exists, return **Unauthorized. Agent not approved for Enterprise** and reject the request; the resolved resource_id is used for audit logging.
 - **Cross-enterprise access attempts: log and follow up** — Any attempt to access data belonging to **another enterprise** (e.g. requesting a project by id that belongs to an enterprise not in the user’s scope, or submitting an update for an entity in another enterprise) must be **logged** with sufficient detail (e.g. endpoint, user/agent identity, session or context_key, requested entity or ids, target enterprise) for manual follow-up. Return an error (e.g. 403 Forbidden or equivalent) to the caller; do not return the data. Logging must be structured so operators can query for cross-enterprise attempts and follow up manually (e.g. security review, abuse investigation).
+- **Audit history access** — Provide a **read-only audit/history API** for SUDO/admin users to query by entity, date range, session, or resource.
 - **Path safety** — Any tool that reads files by path (e.g. `doc_read`) must resolve paths relative to project root and reject paths that escape the root (no `..` or absolute paths outside root).
 - **Write scope** — Database writes only to the configured PostgreSQL database. File writes (if any) only under the designated project directory. No writes to arbitrary system paths.
 - **Input validation** — All tool arguments must be validated (types, allowed values). Invalid input must return a clear error, not crash.
@@ -74,6 +77,6 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 
 - No other databases (e.g. SQLite) as primary store; PostgreSQL only.
 - No HTTP server or SSE in process.
-- No authentication or authorization (trust the host process).
+- No end-user authentication for MCP tools beyond **agent identity** (agent name must resolve to a Resource).
 - No multi-project or multi-workspace support in a single process.
 - No telemetry or external network calls except for future integration backends.

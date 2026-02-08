@@ -6,6 +6,10 @@ title: Gaps Analysis
 
 This document identifies gaps in the current design **on its own terms**: missing definitions, undefined terms, entities or relationships that are referenced but not modeled, and inconsistencies. No comparison to other methodologies is made.
 
+**Status:** Historical snapshot; **Domains, Assets, and Resources are now persisted** in the data model. See [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) for current gaps.
+
+**Note:** **Work items and tasks are the same entity** in the current model (task = work item with level = Task). This document predates that consolidation.
+
 ---
 
 ## Definitions lacking placement in the hierarchy

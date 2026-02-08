@@ -9,7 +9,9 @@ For each MCP endpoint (tools and resources), this document provides:
 1. **Activity diagram** — Logic and decision flow for the endpoint.
 2. **Sequence diagram** — Interactions between the **Agent**, **MCP Server** (session/scope validation, tool or resource handler), and **Storage** (PostgreSQL or file system where applicable).
 
-All endpoints assume the agent has completed the [initial handshake](02-architecture.html#initial-handshake-agent-and-mcp) and sends a valid **context_key** on every request. The server validates the context key and resolves the session scope before executing any tool or resource read.
+All endpoints assume the agent has completed the [initial handshake](02-architecture.html#initial-handshake-agent-and-mcp), **agent identity has been approved**, and the agent sends a valid **context_key** on every request. The server validates the context key and resolves the session scope before executing any tool or resource read.
+
+**Note:** **Tasks are work items with level = Task**; task_* endpoints are the task-level view of work_items.
 
 ---
 
@@ -21,15 +23,15 @@ All endpoints assume the agent has completed the [initial handshake](02-architec
 
 ```mermaid
 flowchart TB
-  Start([Agent calls scope_set]) --> Params[Receive enterprise_id and/or project_id]
-  Params --> AnyParam{At least one\nparameter provided?}
+  Start([Agent calls scope_set]) --> Params[Receive scope_slug]
+  Params --> AnyParam{scope_slug\nprovided?}
   AnyParam -->|No| ErrParams[Return error: scope required]
   AnyParam -->|Yes| ValidateContext[Validate context_key]
   ValidateContext --> ContextOk{Context key valid?}
   ContextOk -->|No| ErrContext[Return error: invalid/expired context]
   ContextOk -->|Yes| ResolveIds[Resolve IDs to GUIDs if slugs]
-  ResolveIds --> IdsOk{IDs exist and\nagent has access?}
-  IdsOk -->|No| ErrIds[Return error: invalid enterprise/project]
+  ResolveIds --> IdsOk{Slug resolves and\nagent has access?}
+  IdsOk -->|No| ErrIds[Return error: invalid scope_slug]
   IdsOk -->|Yes| StoreScope[Store scope for session]
   StoreScope --> ReturnScope[Return set scope to agent]
   ReturnScope --> End([End])
@@ -46,15 +48,15 @@ sequenceDiagram
   participant Server
   participant Session
 
-  Agent->>+Server: scope_set(enterprise_id?, project_id?)
+  Agent->>+Server: scope_set(scope_slug)
   Server->>Server: Validate context_key
   alt context_key invalid
     Server-->>Agent: Error (invalid/expired context)
   else context_key valid
     Server->>Session: Resolve session by context_key
     Session-->>Server: Session
-    Server->>Server: Resolve IDs (slug → GUID if needed)
-    Server->>Session: Validate enterprise_id / project_id
+    Server->>Server: Resolve scope_slug → entity
+    Server->>Session: Validate scope access
     alt Invalid or no access
       Server-->>Agent: Error (invalid scope)
     else Valid

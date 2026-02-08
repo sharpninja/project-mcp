@@ -6,6 +6,8 @@ title: Testing Plan
 
 This document defines a **detailed testing plan** for the Software Project Management MCP server. It covers unit, integration, end-to-end, and manual testing; test data; environments; and quality gates. It aligns with [04 — MCP Surface](04-mcp-surface.html), [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html), and [06 — Tech Requirements](06-tech-requirements.html).
 
+**Note:** **Work items and tasks are the same entity**; a **task** is a **work item with level = Task**. Test cases that mention tasks apply to work_items at level = Task.
+
 ---
 
 ## 1. Testing pyramid and objectives
@@ -43,14 +45,26 @@ tests/
   ProjectMcp.Tests.Unit/
     Handlers/
       ScopeSetHandlerTests.cs
+      EnterpriseHandlerTests.cs
       ProjectGetInfoHandlerTests.cs
       ProjectUpdateHandlerTests.cs
+      RequirementHandlerTests.cs
+      StandardHandlerTests.cs
+      WorkItemHandlerTests.cs
       TaskCreateHandlerTests.cs
       TaskUpdateHandlerTests.cs
       TaskListHandlerTests.cs
       TaskDeleteHandlerTests.cs
+      IssueHandlerTests.cs
       MilestoneHandlerTests.cs
       ReleaseHandlerTests.cs
+      DomainHandlerTests.cs
+      SystemHandlerTests.cs
+      AssetHandlerTests.cs
+      ResourceHandlerTests.cs
+      KeywordHandlerTests.cs
+      WorkQueueHandlerTests.cs
+      AssociationHandlerTests.cs
       DocRegisterHandlerTests.cs
       DocListHandlerTests.cs
     Services/
@@ -58,6 +72,8 @@ tests/
       SessionStoreTests.cs
     Validation/
       ProjectUpdateValidatorTests.cs
+      RequirementCreateValidatorTests.cs
+      WorkItemCreateValidatorTests.cs
       TaskCreateValidatorTests.cs
 ```
 
@@ -69,9 +85,11 @@ tests/
 | **Path resolution** | Path "../etc/passwd" | Rejected (outside root). |
 | **Path resolution** | Path "/absolute/outside/root" | Rejected. |
 | **Path resolution** | Null or empty path | Rejected. |
-| **scope_set** | Valid enterprise_id and project_id | Returns scope; session updated (mock session store). |
-| **scope_set** | Both params null/empty | Validation error. |
-| **scope_set** | Invalid GUID format | Validation error. |
+| **scope_set** | Valid scope_slug | Returns scope; session updated (mock session store). |
+| **scope_set** | Missing scope_slug | Validation error. |
+| **scope_set** | Invalid slug format | Validation error. |
+| **requirement_create** | Missing title | Validation error. |
+| **work_item_create** | Invalid level value | Validation error. |
 | **task_create** | Missing title | Validation error. |
 | **task_create** | Valid title, optional fields null | Success; created DTO returned (mocked store). |
 | **task_update** | Missing id | Validation error. |
@@ -96,9 +114,9 @@ tests/
 ### 3.1 Scope and responsibilities
 
 - **Database:** Real PostgreSQL (Testcontainers or CI-provided service). Apply migrations before tests; optionally seed minimal data.
-- **Repositories / DbContext:** Create project, task, milestone, release, doc; read and update; delete. Assert persistence and scope (e.g. task list filtered by project_id).
+- **Repositories / DbContext:** Create enterprise, project, requirement, standard, work item, task, issue, domain, system, asset, resource, keyword, milestone, release, doc; read and update; delete. Assert persistence and scope (e.g. task list filtered by project_id).
 - **Session store:** If backed by DB or shared state, test context_key → scope resolution and scope_set/scope_get across "requests."
-- **Full tool flow with DB:** Call handler with valid scope and params; handler uses real repository; assert DB state and response (e.g. task_create inserts row, task_list returns it).
+- **Full tool flow with DB:** Call handler with valid scope and params; handler uses real repository; assert DB state and response (e.g. work_item_create inserts row, work_item_list returns it).
 
 ### 3.2 Test database setup
 
@@ -112,16 +130,39 @@ tests/
 tests/
   ProjectMcp.Tests.Integration/
     Data/
+      EnterpriseRepositoryTests.cs
       ProjectRepositoryTests.cs
+      RequirementRepositoryTests.cs
+      StandardRepositoryTests.cs
+      WorkItemRepositoryTests.cs
       TaskRepositoryTests.cs
+      IssueRepositoryTests.cs
       MilestoneRepositoryTests.cs
       ReleaseRepositoryTests.cs
+      DomainRepositoryTests.cs
+      SystemRepositoryTests.cs
+      AssetRepositoryTests.cs
+      ResourceRepositoryTests.cs
+      KeywordRepositoryTests.cs
+      AssociationRepositoryTests.cs
       DocRepositoryTests.cs
     HandlersWithDb/
       ScopeIntegrationTests.cs
+      EnterpriseToolsIntegrationTests.cs
       ProjectToolsIntegrationTests.cs
+      RequirementToolsIntegrationTests.cs
+      StandardToolsIntegrationTests.cs
+      WorkItemToolsIntegrationTests.cs
       TaskToolsIntegrationTests.cs
+      IssueToolsIntegrationTests.cs
       PlanningToolsIntegrationTests.cs
+      DomainToolsIntegrationTests.cs
+      SystemToolsIntegrationTests.cs
+      AssetToolsIntegrationTests.cs
+      ResourceToolsIntegrationTests.cs
+      KeywordToolsIntegrationTests.cs
+      WorkQueueIntegrationTests.cs
+      AssociationToolsIntegrationTests.cs
       DocToolsIntegrationTests.cs
     Resources/
       ResourceSpecIntegrationTests.cs
@@ -135,17 +176,28 @@ tests/
 |------|-----------|----------|
 | **Project** | Create project via repository; get by id | Project persisted; get returns same data. |
 | **Project** | project_update creates then updates | One row; updated fields in DB and in response. |
+| **Requirements** | requirement_create then requirement_list | List contains created requirement. |
+| **Work items** | work_item_create then work_item_list | List contains created item. |
 | **Tasks** | task_create then task_list with no filter | List contains created task. |
 | **Tasks** | task_list with status filter | Only tasks with that status returned. |
 | **Tasks** | task_update then task_list | Updated fields reflected. |
 | **Tasks** | task_delete then task_list | Task no longer in list; get returns not found. |
+| **Issues** | issue_create then issue_list | List contains created issue. |
 | **Milestones** | milestone_create/list/update | CRUD with enterprise scope. |
 | **Releases** | release_create/list/update | CRUD with project scope. |
+| **Domains** | domain_create/list/update | CRUD with enterprise scope. |
+| **Systems** | system_create/list/update | CRUD with enterprise scope. |
+| **Assets** | asset_create/list/update | CRUD with enterprise scope. |
+| **Resources** | resource_create/list/update | CRUD with enterprise scope. |
+| **Keywords** | keyword_create/list/update | CRUD with enterprise scope. |
+| **Associations** | item_dependency_add/remove | Dependency created and removed. |
 | **Docs** | doc_register then doc_list | Entry appears in list. |
-| **Scope** | scope_set with valid IDs; then project_get_info | Returns project for that project_id. |
-| **Scope** | scope_set with invalid project_id | Error; no project returned on subsequent get. |
+| **Scope** | scope_set with valid scope_slug; then project_get_info | Returns project for that scope. |
+| **Scope** | scope_set with invalid scope_slug | Error; no project returned on subsequent get. |
+| **Scope** | Access project in another enterprise | 403 error; attempt logged. |
 | **Resources** | Request project://current/spec after scope_set | Content matches project in DB for that scope. |
 | **Resources** | Request project://current/tasks | Task list matches project_id from scope. |
+| **Audit** | Change tracking records include session_id/resource_id/correlation_id | Audit rows include required fields. |
 
 ### 3.5 Isolation and cleanup
 
@@ -167,7 +219,7 @@ tests/
 2. Start MCP server process with connection string and default scope (or no default).
 3. Send Initialize (client name, version, capabilities).
 4. Parse Initialize response; extract context_key.
-5. Send scope_set(enterprise_id, project_id) with context_key; assert success and scope in response.
+5. Send scope_set(scope_slug) with context_key; assert success and scope in response.
 6. Send project_get_info with context_key; assert project metadata (or empty).
 7. Send project_update with context_key; assert success.
 8. Send project_get_info again; assert updated data.
@@ -176,8 +228,10 @@ tests/
 11. Send task_list with context_key; assert list contains the task.
 12. Send task_update(id, status: "done"); then task_list; assert status updated.
 13. Send task_delete(id); then task_list; assert task gone.
-14. (Optional) Send milestone_create, release_create, doc_register, doc_list, doc_read with safe path; assert success.
-15. Shut down server process.
+14. (Optional) Send requirement_create, work_item_create, issue_create, and domain_create; assert list results.
+15. (Optional) Send milestone_create, release_create, doc_register, doc_list, doc_read with safe path; assert success.
+16. (Optional) Attempt out-of-scope read/write (different enterprise); assert 403 + log entry.
+17. Shut down server process.
 
 ### 4.3 E2E implementation options
 
@@ -205,6 +259,7 @@ This test validates that a **real agent** (Cursor agent CLI), driving a **locall
 
 - **Purpose:** Confirm that the ProjectMCP server behaves correctly when consumed by the Cursor agent CLI: the agent can set scope, create/update project and tasks, milestones, releases, and docs in response to natural-language prompts, and the resulting database state matches expectations at each step.
 - **Scope:** Integration test (real agent, real local server, real database). Requires Cursor agent CLI to be available and a script that submits prompts and then runs DB assertions.
+ - **Skip condition:** If the Cursor agent CLI is not installed or not on PATH, **skip the test** and report the reason.
 
 ### 5.2 Prerequisites
 
@@ -297,20 +352,22 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | # | Area | Steps | Pass criteria |
 |---|------|--------|----------------|
 | 1 | Server start | Add server to Cursor config; restart or reload | Server starts; no errors in log. |
-| 2 | Tools visible | Open MCP / tools panel | scope_set, scope_get, project_get_info, project_update, task_*, milestone_*, release_*, doc_* visible. |
+| 2 | Tools visible | Open MCP / tools panel | scope_set, scope_get, enterprise_*, project_*, requirement_*, standard_*, work_item_*, task_*, issue_*, milestone_*, release_*, domain_*, system_*, asset_*, resource_*, keyword_*, work_queue_*, association tools, doc_* visible. |
 | 3 | Resources visible | Open resources or equivalent | project://current/spec, /tasks, /plan listed. |
-| 4 | scope_set | Call scope_set(enterprise_id, project_id) with valid IDs | Returns scope; no error. |
+| 4 | scope_set | Call scope_set(scope_slug) with valid slug | Returns scope; no error. |
 | 5 | project_get_info | After scope_set, call project_get_info | Returns project or empty; no crash. |
 | 6 | project_update | Call project_update with name, description, status | Returns updated project; project_get_info shows changes. |
-| 7 | task_create | task_create(title: "Manual test task") | Task returned; appears in task_list and in project://current/tasks. |
-| 8 | task_update / task_delete | Update task; then delete | List reflects changes; deleted task gone. |
-| 9 | milestone_create / list | Create milestone; list | Milestone in list. |
-| 10 | release_create / list | Create release; list | Release in list. |
-| 11 | doc_register / doc_list | Register a doc; list | Doc in list. |
-| 12 | doc_read | doc_read with path under project root | Content returned. |
-| 13 | doc_read safety | Try path like "../other" (if possible) | Error, no content from outside root. |
-| 14 | Invalid context | (If client allows) Send request without or with wrong context_key | Error response; no data. |
-| 15 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
+| 7 | work_item_create | work_item_create(title: "Manual work item", level: "Work") | Item returned; appears in work_item_list. |
+| 8 | task_create | task_create(title: "Manual test task") | Task returned; appears in task_list and in project://current/tasks. |
+| 9 | task_update / task_delete | Update task; then delete | List reflects changes; deleted task gone. |
+| 10 | issue_create | issue_create(title: "Manual issue") | Issue returned; appears in issue_list. |
+| 11 | milestone_create / list | Create milestone; list | Milestone in list. |
+| 12 | release_create / list | Create release; list | Release in list. |
+| 13 | doc_register / doc_list | Register a doc; list | Doc in list. |
+| 14 | doc_read | doc_read with path under project root | Content returned. |
+| 15 | doc_read safety | Try path like "../other" (if possible) | Error, no content from outside root. |
+| 16 | Invalid context | (If client allows) Send request without or with wrong context_key | Error response; no data. |
+| 17 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
 
 ### 6.2 Exploratory testing
 
@@ -326,6 +383,8 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 
 - **Enterprise:** 1 row (e.g. id, name "Test Enterprise").
 - **Project:** 1 row (enterprise_id, name "Test Project", status active).
+- **Requirements:** 0–2 requirements (optional) for list/filter tests.
+- **Work items:** 0–2 work items (optional) for list/filter tests.
 - **Tasks:** 0–2 tasks (optional) for list/filter tests.
 - **Milestone:** 1 (optional) for milestone_id filter.
 - **Release:** 1 (optional) for release_id.
@@ -371,8 +430,17 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 |-----------------|------|-------------|-----|--------------------|--------|
 | scope_set / scope_get | Handler + session store | With DB (scope → project) | Full flow with context_key | Prompt step + DB assert | Checklist |
 | project_get_info / project_update | Handlers, validation | Repository + handler | Yes | Prompt steps + DB assert | Yes |
+| enterprise_* | Handlers, validation | Repository + handler | Optional | Optional prompt step | Yes |
+| requirement_* | Handlers, validation | Repository + handler | Optional | Optional prompt step | Yes |
+| standard_* | Handlers, validation | Repository + handler | Optional | Optional prompt step | Yes |
+| work_item_* | Handlers, validation | Repository + handler + filters | Yes | Optional prompt step | Yes |
 | task_* | Handlers, validation | Repository + handler + filters | Yes | Prompt steps + DB assert | Yes |
+| issue_* | Handlers, validation | Repository + handler + filters | Optional | Optional prompt step | Yes |
 | milestone_* / release_* | Handlers | Repository + handler | Optional | Prompt steps + DB assert | Yes |
+| domain_* / system_* | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
+| asset_* / resource_* / keyword_* | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
+| work_queue_* | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
+| associations & dependencies | Handlers | Repository + handler | Optional | Optional prompt step | Yes |
 | doc_register / doc_list | Handlers | Repository + handler | Optional | Optional in script | Yes |
 | doc_read + path safety | PathResolver only | Optional (real file under root) | Optional | — | Yes (and safety) |
 | Resources (spec/tasks/plan) | — | Handler + store returns correct data | Yes (resource read) | Agent may use resources | Yes |

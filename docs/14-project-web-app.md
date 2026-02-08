@@ -12,7 +12,7 @@ This document defines a **web application** that users can visit to browse and m
 
 - **Purpose:** Provide a browser-based UI for viewing and editing enterprise/project data (projects, requirements, work, tasks, milestones, releases, resources, domains, assets, issues, keywords) without using the MCP or an AI client.
 - **Users:** Humans (project managers, team members, stakeholders) who need to navigate hierarchy, search entities, track progress, view timelines, and manage issues.
-- **Scope:** Read and write access to the same entities and relationships as the [data model](03-data-model.html); methodology-agnostic. The web app and the MCP server are separate entry points to the same database.
+- **Scope:** Read and write access to the same entities and relationships as the [data model](03-data-model.html); methodology-agnostic. **Work items and tasks are the same entity** (task = work item with level = Task). The web app and the MCP server are separate entry points to the same database.
 - **Authentication:** Users are authenticated with **OAuth2** using **GitHub** as the provider. Their **visibility into projects and enterprises is filtered by claims in their token**; see §2.
 - **Out of scope for this doc:** Mobile-specific UX, real-time collaboration.
 
@@ -36,7 +36,8 @@ This document defines a **web application** that users can visit to browse and m
   - **Enterprise IDs:** e.g. `enterprise_id` (multi-valued) or `allowed_enterprises` (JSON array of GUIDs). The user sees only those enterprises.
   - **Project IDs:** e.g. `project_id` (multi-valued) or `allowed_projects` (JSON array of GUIDs). The user sees only those projects (and their parent enterprises if allowed). Alternatively, scope could be expressed only at enterprise level (user sees all projects under allowed enterprises).
   - **Roles (optional):** e.g. `role` or `project_role` (e.g. `admin`, `member`, `viewer`) per enterprise or project to drive create/update/delete permissions; if not present, treat as “viewer” or “member” per deployment policy.
-  - **SUDO role:** The **SUDO** role is a special role (e.g. claim `role: SUDO` or from an app-defined role mapping). **Only users with the SUDO role may add (create) enterprise records.** All other users cannot create enterprises; they may only view and manage data within enterprises/projects for which they have scope. The backend must enforce this on any “create enterprise” operation (e.g. return 403 if the user does not have SUDO).
+- **SUDO role:** The **SUDO** role is a special role (e.g. claim `role: SUDO` or from an app-defined role mapping). **Only users with the SUDO role may add (create) enterprise records.** All other users cannot create enterprises; they may only view and manage data within enterprises/projects for which they have scope. The backend must enforce this on any “create enterprise” operation (e.g. return 403 if the user does not have SUDO). **Source of truth:** env `PROJECT_MCP_SUDO_GITHUB_IDS` (comma-separated GitHub user ids) used to grant SUDO at sign-in.
+- **MCP agent identity:** MCP clients (e.g. Copilot/Cursor) must resolve their agent name to a **Resource** in the enterprise; otherwise requests return **Unauthorized. Agent not approved for Enterprise** (see [04 — MCP Surface](04-mcp-surface.html)).
 - **How filtering is applied:**
   - **Tree:** Load enterprises and projects only for IDs present in the user’s claims (or for enterprises that contain at least one allowed project). Children (requirements, work, tasks, etc.) are loaded only when their parent project/enterprise is in scope.
   - **Search (keyword and full-text):** Restrict queries with a predicate such as `enterprise_id IN (user's allowed enterprises)` and `project_id IN (user's allowed projects)` so results only include entities the user is allowed to see.
@@ -156,7 +157,7 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
 ## 8. Gantt charts
 
 - **Purpose:** Visualize work and tasks on a **time axis** (start date, end date / deadline) to show schedule, dependencies, and overlap.
-- **Data source:** Work (start_date, deadline), tasks (optional dates or derived from work), task dependencies (`task_dependencies`). Milestones and releases can be shown as markers or swimlanes.
+- **Data source:** Work (start_date, deadline), tasks (optional dates or derived from work), task dependencies (**item_dependencies**). Milestones and releases can be shown as markers or swimlanes.
 - **Scope:** User selects a **project** (and optionally a milestone or work item) and sees:
   - Rows: work items and/or tasks (optionally grouped by work item or requirement).
   - Timeline: bars for start–end; dependency arrows (task A → task B).
@@ -196,6 +197,14 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
 - **Data layer:** Reuse or mirror the MCP data model (entities, DbContext). Add full-text search support (migrations for `tsvector`/GIN if not already present). Services: `IEnterpriseService`, `IProjectService`, `ITaskService`, `ISearchService`, `IIssueService`, etc., that wrap EF Core or raw SQL for reports. **Every service receives the current user’s allowed enterprise/project IDs (from token claims) and filters all queries by that scope.**
 - **API:** If the Blazor app is WebAssembly or hybrid, expose an **ASP.NET Core minimal API or controllers** for data (JSON). Same server can host both Blazor and API. If Blazor Server only, services can be direct server-side (no separate HTTP API).
 - **PostgreSQL:** Same connection string pattern as MCP (e.g. `DATABASE_URL` or `ConnectionStrings__DefaultConnection`). The web app connects to the same database the MCP server uses (or a read replica for read-heavy reports, later).
+
+### API contract (summary)
+
+- **Auth:** GitHub OAuth2 bearer token; reject unauthenticated requests.
+- **Scope:** Requests include **scope_slug** (enterprise/project/work item slug) to select perspective; server resolves slug and applies child traversal.
+- **Endpoints:** CRUD for projects, requirements, standards, work_items (tasks), issues, milestones, releases, domains, systems, assets, resources, keywords, plus association endpoints.
+- **Pagination:** `page` + `page_size` (or `cursor`) on list endpoints; return total/count metadata.
+- **Errors:** Standard JSON error shape `{ error: string, code?: string }`, with 401/403/404 as appropriate.
 
 ---
 

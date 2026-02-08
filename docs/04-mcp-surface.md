@@ -21,6 +21,14 @@ title: MCP Surface
 - **Related requests** — When the agent sends the **same correlation_id** on multiple requests, the server treats them as related (e.g. one user action that resulted in several tool calls). The server may use the correlation_id for logging, tracing, debugging, or grouping in observability tools. It does not change request semantics or authorization.
 - **Transport** — The correlation_id is sent per request (e.g. request header `X-Correlation-Id` or `MCP-Correlation-Id`, or a field in the request envelope). The server passes it through to logs/traces and does not validate or interpret its value.
 
+## Agent identity (resource)
+
+**The agent name must resolve to a Resource in the enterprise.**
+
+- **Agent name required** — The MCP client name (e.g. “cursor”, “copilot”) is used to resolve a **Resource** record in the current enterprise.
+- **Unauthorized if missing** — If the agent name does not resolve to a Resource, return **Unauthorized. Agent not approved for Enterprise** and do not execute the tool or return the resource.
+- **Audit identity** — The resolved resource_id is recorded on change tracking and logs for MCP-originated requests.
+
 ## Scope (enterprise / project)
 
 **The agent sets scope once; the server remembers it for that agent until the agent requests a different scope.**
@@ -31,7 +39,7 @@ title: MCP Surface
 
 **Scope tool:**
 
-- **scope_set** — Set the current session scope. Parameters: **enterprise_id** (optional, GUID or slug), **project_id** (optional, GUID or slug). At least one must be provided when the server supports multiple enterprises/projects. The server validates the ids, stores the scope for this session, and returns the set scope (e.g. `{ enterprise_id, project_id }`). All subsequent requests from this agent use this scope until the agent calls **scope_set** again.
+- **scope_set** — Set the current session scope. Parameters: **scope_slug** (required; enterprise/project/work item slug), **enterprise_id** (optional, GUID or slug), **project_id** (optional, GUID or slug). The server resolves the slug to the target entity, derives the enterprise/project scope (and child traversal), stores it for the session, and returns the set scope (e.g. `{ enterprise_id, project_id, scope_slug }`). All subsequent requests from this agent use this scope until the agent calls **scope_set** again.
 - **scope_get** (optional) — Return the current session scope so the agent can confirm what scope is active without changing it.
 
 Tools and resources do **not** take scope parameters; they always operate in the session’s current scope. This avoids repeating scope on every call and lets the agent switch context only when the user asks to work in a different project or enterprise.
@@ -47,6 +55,10 @@ Expose current project state so the client can load context without calling tool
 | `project://current/spec` | Project metadata, tech stack, doc list |
 | `project://current/tasks` | Full task list |
 | `project://current/plan` | Milestones, releases |
+| `project://current/requirements` | Requirements list for current project |
+| `project://current/issues` | Issues list for current project |
+| `enterprise://current/resources` | Resources list for current enterprise |
+| `work_item://{id}` | Work item detail and status (subscribe for updates; tasks are work items with level = Task) |
 
 If the MCP SDK does not support query params on resource URIs, use separate resource names for filtered views (e.g. `project://current/tasks/milestone/{id}`) only if needed; v1 can keep a single tasks resource and filter via tools.
 
@@ -56,25 +68,112 @@ Naming: consistent `*_create`, `*_update`, `*_list` (and `*_delete` where applic
 
 ### Scope
 
-- **scope_set** — Set the current session scope (enterprise_id and/or project_id, optional slugs). Server remembers this for the agent until the agent calls scope_set again. Returns the set scope.
+- **scope_set** — Set the current session scope (scope_slug required; enterprise_id/project_id optional). Server remembers this for the agent until the agent calls scope_set again. Returns the set scope.
 - **scope_get** — Return the current session scope (read-only; no parameters).
+
+### Enterprise
+
+- **enterprise_create** — Create enterprise (SUDO only): name, description.
+- **enterprise_update** — Update enterprise: id, name, description.
+- **enterprise_get** — Get enterprise by id or slug.
+- **enterprise_list** — List enterprises in scope (SUDO can list all; non-SUDO limited by allowed scope).
 
 ### Project
 
 - **project_get_info** — Return current project metadata (name, description, status, tech stack, docs). Return empty/not-initialized if no project exists.
 - **project_update** — Create or update project: name, description, status, techStack (object), docs (array of { name, path, type, description? }).
 
+### Requirements
+
+- **requirement_create** — title (required), description, acceptanceCriteria, parentRequirementId, domainId, milestoneId.
+- **requirement_update** — id (required), plus any fields to change.
+- **requirement_list** — optional filters: parentRequirementId, domainId, milestoneId, keyword.
+- **requirement_delete** — id (required).
+
+### Standards
+
+- **standard_create** — title (required), description, detailedNotes, scope (enterprise | project).
+- **standard_update** — id (required), plus any fields to change.
+- **standard_list** — optional filters: scope, keyword.
+- **standard_delete** — id (required).
+
+### Work items
+
+- **work_item_create** — title (required), level (Work | Task), description, state, status, priority, assignee (**resource_id or resource slug**), parentId, labels, milestoneId, releaseId.
+- **work_item_update** — id (required), plus any fields to change.
+- **work_item_list** — optional filters: level, state, status, milestoneId, assignee (**resource_id or resource slug**), parentId.
+- **work_item_delete** — id (required).
+
+**Note:** **Tasks are work items with level = Task**; the **task_*** tools are aliases for **work_item_*** constrained to level = Task.
+
+### Work queue
+
+- **work_queue_get** — workItemId (required), **count** (optional); returns ordered queue items for that work item (first N when count provided). Items can be child **work items or tasks**.
+- **work_queue_update** — workItemId (required), ordered itemIds (or position list) to set queue order.
+
 ### Tasks
 
-- **task_create** — title (required), description, status, priority, assignee, labels, milestoneId, releaseId.
+- **task_create** — title (required), description, status, priority, assignee (**resource_id or resource slug**), labels, milestoneId, releaseId.
 - **task_update** — id (required), plus any fields to change.
 - **task_list** — optional filters: status, milestoneId, assignee.
 - **task_delete** — id (required).
+
+### Issues
+
+- **issue_create** — title (required), description, state, severity, priority, assignee (**resource_id or resource slug**), workItemId, requirementIds.
+- **issue_update** — id (required), plus any fields to change.
+- **issue_list** — optional filters: state, severity, priority, assignee, requirementId, workItemId.
+- **issue_delete** — id (required).
 
 ### Planning
 
 - **milestone_create** / **milestone_update** / **milestone_list**
 - **release_create** / **release_update** / **release_list**
+
+### Domains
+
+- **domain_create** — name (required), description.
+- **domain_update** — id (required), plus any fields to change.
+- **domain_list** — optional filters: keyword.
+- **domain_delete** — id (required).
+
+### Systems
+
+- **system_create** — name (required), category (Application | Framework | API | Compound), description.
+- **system_update** — id (required), plus any fields to change.
+- **system_list** — optional filters: category, keyword.
+- **system_delete** — id (required).
+
+### Assets
+
+- **asset_create** — name (required), assetTypeId, urn, thumbnailAssetId, description.
+- **asset_update** — id (required), plus any fields to change.
+- **asset_list** — optional filters: assetTypeId, keyword.
+- **asset_delete** — id (required).
+
+### Resources
+
+- **resource_create** — name (required), description, oauth2Sub.
+- **resource_update** — id (required), plus any fields to change.
+- **resource_list** — optional filters: keyword.
+- **resource_delete** — id (required).
+
+### Keywords
+
+- **keyword_create** — label (required).
+- **keyword_update** — id (required), label.
+- **keyword_list** — optional filters: label.
+- **keyword_delete** — id (required).
+
+### Associations and dependencies
+
+- **project_dependency_add** / **project_dependency_remove** — dependentProjectId, parentProjectId.
+- **item_dependency_add** / **item_dependency_remove** — dependentItemId, prerequisiteItemId.
+- **work_item_requirement_add** / **work_item_requirement_remove** — workItemId, requirementId.
+- **issue_requirement_add** / **issue_requirement_remove** — issueId, requirementId.
+- **system_requirement_add** / **system_requirement_remove** — systemId, requirementId, role (included | dependency).
+- **resource_team_member_add** / **resource_team_member_remove** — teamId, memberId.
+- **entity_keyword_add** / **entity_keyword_remove** — entityType, entityId, keywordId.
 
 ### Docs
 

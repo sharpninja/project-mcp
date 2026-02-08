@@ -48,6 +48,10 @@ Slugs are used in the UI, in references in text, and for traceability (e.g. “s
 | Item 1 (level = Work, top-level) | Project 1              | `E1-P001-WI0001`         | Work item under project; owner slug `E1-P001` + `WI` + number. |
 | Item 2 (level = Task) | Item 1                      | `E1-P001-WI0001-WI000002` | Task under work item; same prefix WI, six-digit index. |
 | Item 3 (level = Task, sub-task) | Item 2               | `E1-P001-WI0001-WI000002-WI000003` | Sub-task under task; owner is parent item’s full slug + WI + index. |
+| Milestone 1            | Enterprise 1               | `E1-MS0001`              | Milestone owned by enterprise; prefix `MS`. |
+| Release 1              | Project 1                  | `E1-P001-REL0001`        | Release owned by project; prefix `REL`. |
+| Issue 1                | Project 1                  | `E1-P001-ISS0001`        | Issue owned by project; prefix `ISS`. |
+| Keyword 1              | Enterprise 1               | `E1-KW0001`              | Keyword owned by enterprise; prefix `KW`. |
 | Domain (security)     | Enterprise 1                | `E1-security`                             | Slug = enterprise slug + hyphen + name; name unique per enterprise. |
 | Domain (billing)      | Enterprise 1                | `E1-billing`                              | Same pattern. |
 | System (payment API)  | Enterprise 1                | `E1-payment-api`                          | Slug = enterprise slug + hyphen + name; same as Domain. |
@@ -59,7 +63,7 @@ Slugs are used in the UI, in references in text, and for traceability (e.g. “s
 ## Conventions
 
 - **Separator** — Use a single character (e.g. `-`) between owner slug and the new segment.
-- **Type prefixes** — Short, consistent prefixes per entity type (e.g. `E` Enterprise, `P` Project, `REQ` Requirement, `STD` Standard, **`WI`** Work / Work item / Task [same concept; unified entity with level Work | Task]). Other entity types (Asset, Resource, Sub-project, etc.) will have their own prefixes defined in the data model. **Domain**, **System**, **Asset**, and **Resource** are exceptions: their slug is **enterprise slug + hyphen + name** (no type prefix or index); name is unique per enterprise. **Asset** and **Resource** references use the immutable GUID, not the slug.
+- **Type prefixes** — Short, consistent prefixes per entity type (e.g. `E` Enterprise, `P` Project, `REQ` Requirement, `STD` Standard, **`WI`** Work / Work item / Task [same concept; unified entity with level Work | Task], `MS` Milestone, `REL` Release, `ISS` Issue, `KW` Keyword). **Domain**, **System**, **Asset**, and **Resource** are exceptions: their slug is **enterprise slug + hyphen + name** (no type prefix or index); name is unique per enterprise. **Asset** and **Resource** references use the immutable GUID, not the slug.
 - **Sequence numbers** — Zero-padded for sortability and fixed width (e.g. `001`, `0001`). Width can vary by entity type. **Work items** (and tasks, same entity) use a **six-digit zero-padded** index (e.g. `000001`).
 - **Uniqueness** — The full slug is unique within the system. The **unique integer index** (the number in the slug segment) is allocated per owner per entity type for all entities; use a sequential allocator (or equivalent) so that no two entities of the same type under the same owner share the same index.
 

@@ -22,8 +22,13 @@ This document provides a **detailed implementation plan** for the Software Proje
 | 7 | Doc tools | doc_register, doc_list, doc_read | 1–2 days |
 | 8 | Logging and hardening | Serilog, path safety, validation, docs | 2–3 days |
 | 9 | GitHub OAuth2 integration | OAuth App, ASP.NET Core auth, claims, resource/scope resolution | 2–3 days |
+| 10 | Extended domain entities | Requirements, standards, domains, systems, assets, resources, keywords, issues, associations | 5–8 days |
+| 11 | Web app + API surface | Blazor web app, API contract, FTS schema | 5–8 days |
+| 12 | Mobile app | Avalonia task queue app | 3–5 days |
 
-Total rough estimate: **18–28 days** (single developer, excluding deployment automation). Phase 9 is required for the [Project Web App](14-project-web-app.html) and [Mobile App](15-mobile-app.html).
+Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases add additional time.
+
+**Note:** **Work items and tasks are the same entity**; references to task_* or “task” in this plan refer to **work_items with level = Task**.
 
 ---
 
@@ -57,21 +62,22 @@ Total rough estimate: **18–28 days** (single developer, excluding deployment a
 
 ## Phase 1: Data layer
 
-**Goal:** PostgreSQL schema, migrations, and data access for project, tasks, milestones, releases (v1 scope). No MCP tools yet beyond stub.
+**Goal:** PostgreSQL schema, migrations, and data access for project, **work items (tasks are level = Task)**, milestones, releases (v1 scope). No MCP tools yet beyond stub.
 
 ### Tasks
 
 | ID | Task | Details | Dependencies |
 |----|------|---------|--------------|
-| 1.1 | Define entity models | C# types for Enterprise, Project, Task, Milestone, Release, Doc (per [03 — Data Model](03-data-model.html)). Include id (GUID), display_id/slug, FKs. Use nullable reference types. | — |
+| 1.1 | Define entity models | C# types for Enterprise, Project, **WorkItem (level = Work | Task)**, Milestone, Release, Doc (per [03 — Data Model](03-data-model.html)). Include id (GUID), display_id/slug, FKs. Use nullable reference types. | — |
 | 1.2 | Choose data access | Select EF Core + Npgsql or Dapper + Npgsql. Add packages and DbContext or repository interfaces. | 1.1 |
-| 1.3 | Create initial migration | Tables: enterprise, project, task, milestone, release, docs (or project-embedded docs). Match doc section "PostgreSQL persistence" in [03 — Data Model](03-data-model.html). Use UTF-8; JSONB for tech_stack, labels where specified. | 1.2 |
+| 1.3 | Create initial migration | Tables: enterprise, project, **work_items**, milestone, release, docs (or project-embedded docs). Match doc section "PostgreSQL persistence" in [03 — Data Model](03-data-model.html). Use UTF-8; JSONB for tech_stack, labels where specified. | 1.2 |
 | 1.4 | Connection from env | Read connection string from env (e.g. `DATABASE_URL`, `PROJECT_MCP_CONNECTION_STRING`, or `ConnectionStrings__DefaultConnection`). Validate on startup; fail fast with clear message if missing. | 1.2 |
 | 1.5 | Implement project CRUD | Methods: GetProject(projectId), CreateOrUpdateProject(enterpriseId, projectId?, dto). Scope to single enterprise/project for v1 if needed. | 1.3, 1.4 |
-| 1.6 | Implement task repository | CreateTask, UpdateTask, GetTask, ListTasks(filters), DeleteTask. Filters: status, milestoneId, assignee. | 1.3, 1.4 |
+| 1.6 | Implement work item repository | Create/Update/Get/List/Delete for work_items (level = Work | Task). Filters: level, status, milestoneId, assignee. | 1.3, 1.4 |
 | 1.7 | Implement milestone/release repositories | Create/Update/List for milestones (by enterprise) and releases (by project). | 1.3, 1.4 |
 | 1.8 | Implement docs storage | Register doc (name, path, type, description); list docs by project. Store in docs table or JSONB on project. | 1.3, 1.4 |
 | 1.9 | Implement change tracking | Enable change tracking on all fields of all entity tables per [03 — Data Model](03-data-model.html). Add audit/history tables or triggers that record insert/update/delete for every entity table and every column; capture old/new value (or row state), changed_at, **session identifier** (e.g. context_key or session id), **resource identifier** (resource_id of the actor), and **correlation id** of the request (when provided). Ensure no entity or field is excluded. | 1.3 |
+| 1.10 | Add keyword tables | Create **keywords** and **entity_keywords** tables and repositories. | 1.3 |
 
 ### Deliverables
 
@@ -99,10 +105,11 @@ Total rough estimate: **18–28 days** (single developer, excluding deployment a
 | 2.1 | Session store | In-memory session store (connection/session id → scope). Store enterprise_id, project_id per session. For stdio, one connection = one session; generate context_key (e.g. GUID) on Initialize. | Phase 0 |
 | 2.2 | Issue context_key in Initialize | In Initialize response, include context_key. Document that the client must send it on every request (header or envelope per transport). | 2.1 |
 | 2.3 | Validate context_key on each request | Middleware or handler: resolve context_key to session; if missing/invalid/expired, return error and do not run tool or resource. | 2.1, 2.2 |
-| 2.4 | Implement scope_set | Parameters: enterprise_id?, project_id? (GUID or slug). At least one required. Resolve slugs to GUIDs; validate IDs exist. Store in session; return set scope. | 2.1, 1.5 |
+| 2.4 | Implement scope_set | Parameters: **scope_slug** (required; enterprise/project/work item slug), optional enterprise_id/project_id for compatibility. Resolve slug → entity; validate IDs exist; store scope and scope_slug. | 2.1, 1.5 |
 | 2.5 | Implement scope_get | Return current session scope (enterprise_id, project_id). No parameters. | 2.1 |
 | 2.6 | Default scope from config | If env PROJECT_MCP_ENTERPRISE_ID and/or PROJECT_MCP_PROJECT_ID are set, use as default when session has no scope yet. Otherwise require scope_set before other tools. | 2.1 |
 | 2.7 | Wire scope into stub project_get_info | project_get_info uses session scope to call GetProject(project_id). Return empty/not-initialized if no project. | 2.3, 2.4, 1.5 |
+| 2.8 | Resolve agent resource_id | Resolve MCP client name to a Resource; store resource_id in session for audit logging; reject if missing. | 2.1 |
 
 ### Deliverables
 
@@ -288,7 +295,8 @@ Total rough estimate: **18–28 days** (single developer, excluding deployment a
 | 9.3 | Implement callback and claim mapping | On callback, exchange code for access token; optionally call GitHub API `/user` to get user id and login. Map GitHub user id to `oauth2_sub` and build `ClaimsPrincipal` with name, role (e.g. SUDO from app config or DB), and app-defined enterprise/project scope. | 9.2, data layer for resources/scope |
 | 9.4 | Protect API and web routes | Require authentication on API endpoints and Blazor pages; inject `HttpContext.User` or scope service. Reject unauthenticated requests with 401. | 9.3 |
 | 9.5 | Enforce SUDO for enterprise create | On any “create enterprise” endpoint, check that the user has the SUDO role (from claims); if not, return 403 Forbidden. | 9.3 |
-| 9.6 | Document configuration | Document env vars (e.g. `GitHub:ClientId`, `GitHub:ClientSecret`, `GitHub:CallbackPath`) and optional SUDO allow-list (e.g. GitHub user ids or logins that get SUDO). No secrets in repo. | 9.1 |
+| 9.6 | SUDO allowlist env var | Use `PROJECT_MCP_SUDO_GITHUB_IDS` (comma-separated GitHub user ids) to grant SUDO on protected endpoints. | 9.3 |
+| 9.7 | Document configuration | Document env vars (e.g. `GitHub:ClientId`, `GitHub:ClientSecret`, `GitHub:CallbackPath`) and SUDO allowlist (`PROJECT_MCP_SUDO_GITHUB_IDS`). No secrets in repo. | 9.1 |
 
 ### Deliverables
 
@@ -357,11 +365,55 @@ Follow these steps to integrate GitHub as the OAuth2 provider.
 
 - **Development:** Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (or `GitHub:ClientId`, `GitHub:ClientSecret`) in your environment or `appsettings.Development.json` (and ensure appsettings are not committed if they contain secrets). Use a callback URL like `http://localhost:5000/signin-github` in both the GitHub OAuth App and your app.
 - **Production:** Store the client secret in a secret store or environment variable; never in the image or repo. Use HTTPS and the production callback URL in the GitHub OAuth App.
-- **SUDO allow-list:** Configure which GitHub user ids or logins have the SUDO role (e.g. `SudoUsers: ["github-id-123", "another-login"]` or from the database). Document in README or deployment docs.
+- **SUDO allow-list:** Configure `PROJECT_MCP_SUDO_GITHUB_IDS` (comma-separated GitHub user ids) to grant SUDO; document in README or deployment docs.
 
 #### 6. Optional: Resource resolution
 
 - When handling API requests, resolve the current user’s **resource** by querying the `resources` table for `oauth2_sub` = the GitHub user id (from `User.FindFirst(ClaimTypes.NameIdentifier)?.Value` or your “sub” claim). Use that resource for “assigned to me” and task queue filtering. If no resource is found, the user may still have scope claims but no personal assignments.
+
+---
+
+## Phase 10: Extended domain entities
+
+**Goal:** Implement requirements, standards, domains, systems, assets, resources, keywords, issues, and associations end-to-end.
+
+### Tasks
+
+| ID | Task | Details | Dependencies |
+|----|------|---------|--------------|
+| 10.1 | Add schema/migrations | Tables for requirements, standards, domains, systems, assets, resources, keywords, issues, and junction tables (entity_keywords, system_requirement_associations, item_dependencies, work_item_requirements, issue_requirements, resource_team_members). | 1.3 |
+| 10.2 | Repositories/services | CRUD repositories/services for new entities and associations. | 10.1 |
+| 10.3 | MCP tools | Add MCP tools for new entities and association endpoints per [04 — MCP Surface](04-mcp-surface.html). | 10.2 |
+| 10.4 | Resource URIs | Add read-only resources for requirements/issues and enterprise-level lists. | 10.2 |
+
+---
+
+## Phase 11: Web app + API surface
+
+**Goal:** Deliver the web app and a documented HTTP API.
+
+### Tasks
+
+| ID | Task | Details | Dependencies |
+|----|------|---------|--------------|
+| 11.1 | API contract doc | Define CRUD endpoints, scope_slug, pagination, and error shapes. | 9.4 |
+| 11.2 | API implementation | Implement endpoints for core entities and queue operations with scope_slug enforcement. | 11.1 |
+| 11.3 | Full-text search schema | Add tsvector columns and GIN indexes for searchable entities. | 10.1 |
+| 11.4 | Web app UI | Blazor web app implementing tree/search/reports/Gantt/issues. | 11.2 |
+
+---
+
+## Phase 12: Mobile app
+
+**Goal:** Deliver the Avalonia task-queue mobile app.
+
+### Tasks
+
+| ID | Task | Details | Dependencies |
+|----|------|---------|--------------|
+| 12.1 | Auth + API integration | GitHub OAuth2 (PKCE), API base URL config, scope_slug usage. | 11.2 |
+| 12.2 | Task queue UI | Queue list, detail, status updates, reorder (if supported). | 12.1 |
+| 12.3 | Distribution setup | Build/signing pipeline and release packaging. | 12.2 |
 
 ---
 
@@ -379,6 +431,9 @@ flowchart LR
   P7[Phase 7: Doc tools]
   P8[Phase 8: Logging/docs]
   P9[Phase 9: GitHub OAuth2]
+  P10[Phase 10: Extended entities]
+  P11[Phase 11: Web app + API]
+  P12[Phase 12: Mobile app]
 
   P0 --> P2
   P1 --> P2
@@ -396,6 +451,9 @@ flowchart LR
   P6 --> P8
   P7 --> P8
   P1 --> P9
+  P9 --> P10
+  P10 --> P11
+  P11 --> P12
 ```
 
 ---
@@ -406,7 +464,7 @@ flowchart LR
 |------|------------|
 | MCP SDK API changes | Pin SDK version; check release notes before upgrading. |
 | Schema drift from data model | Keep [03 — Data Model](03-data-model.html) and migrations in sync; review in Phase 1 and 8. |
-| Scope creep to full data model | Implement only project, task, milestone, release, docs for v1; defer requirements, work items, etc. |
+| Scope creep to full data model | Deliver in phases: Phase 1 minimal scope, Phase 10+ for extended entities, Phase 11–12 for web/mobile. |
 
 ---
 
@@ -414,5 +472,5 @@ flowchart LR
 
 - HTTP/SSE transport for MCP (stdio only for v1).
 - Multi-project/multi-enterprise in one MCP process (single scope per session is enough for v1).
-- Authentication/authorization **for the MCP server** (trust host process per [06 — Tech Requirements](06-tech-requirements.html)). The **web app and API** use GitHub OAuth2 (Phase 9).
+- End-user authentication for MCP tools (MCP relies on **agent identity**; web app/API use GitHub OAuth2 in Phase 9).
 - GitHub as MCP backend adapter (PostgreSQL only for MCP; adapter interface can be added later).

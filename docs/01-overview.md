@@ -14,6 +14,8 @@ Build an MCP server that gives an AI assistant the ability to manage software pr
 - **Project metadata** — name, description, status
 - **Tech stack** — languages, frameworks, key dependencies
 
+**Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.
+
 **Storage:** PostgreSQL database. The design will allow adding GitHub, Jira, or other backends later (e.g. sync or alternative store).
 
 ## Scope
@@ -56,7 +58,29 @@ The agent chooses tools based on the user’s request (e.g. “Add a task to fix
 2. **“Add a task: Implement password reset”** — Agent calls `task_create` with title (and optional description, status, priority, assignee, milestone/release); may call `task_list` or resources afterward to confirm or show the new task.
 3. **“What’s in the Beta milestone?”** — Agent fetches `project://current/plan` (or uses `milestone_list`), then `project://current/tasks` or `task_list` filtered by milestone, and lists tasks in that milestone.
 4. **“Update the README”** — Agent might use `doc_read` to get current content, then (outside MCP) suggest or apply edits; it can use `doc_register` to register or update the doc entry if the path or metadata changes.
-5. **“Read the architecture decision for auth”** — Agent uses `doc_list` to find the relevant ADR, then `doc_read` with that path to load the content and answer.
+5. **“Get next work item and begin work”** — Agent calls `work_queue_get` to receive the next work item (returned as a prompt); it **subscribes to `work_item://{id}` for the work item and its child items**, then begins processing the prompt, creating or updating child work items/tasks as needed.
+6. **“Get next five work items”** — Agent calls `work_queue_get` with **count = 5** and returns the first five work items or tasks in the queue.
+7. **“Get next five tasks”** — Agent calls `work_queue_get` with **count = 5** to get the queued work items, then **walks each work item’s queue** (another `work_queue_get`) to retrieve task-level items (level = Task).
+8. **“Mark work complete”** — Agent calls `work_item_update` with the work item **slug** and sets **state = Complete**; the completed item no longer appears in `work_queue_get`.
+9. **“Mark task complete”** — Agent calls `work_item_update` with the task **slug** and sets **status = done** (task = work item with level = Task).
+10. **“Read the architecture decision for auth”** — Agent uses `doc_list` to find the relevant ADR, then `doc_read` with that path to load the content and answer.
+
+### Example: requirement → work breakdown
+
+User prompt: **“Add requirement to implement a todo list and assign the work to Copilot.”**
+
+**Expected tool flow (tasks are work items with level = Task):**
+
+1. **requirement_create** — Create the requirement (title: “Implement todo list”, description as needed).
+2. **work_item_create** — Create a **parent work item** (level = Work) assigned to **copilot**; use the requirement as the rationale.
+3. **work_item_requirement_add** — Link the parent work item to the requirement.
+4. **work_item_create** — Create a **planning work item** (level = Work) as a child of the parent (parentId = parent work item).
+5. **work_item_create** — Create **planning tasks** (level = Task) under the planning work item (e.g. “Create implementation plan”, “Write plan markdown”).
+6. **doc_register** — Register the plan file (e.g. `docs/plan.md`) after the agent writes it in the repo.
+7. **work_item_create** — Create an **implementation work item** (level = Work) as another child of the parent, with child tasks (level = Task) for coding steps.
+8. **work_item_create** — Create a **testing work item** (level = Work) as another child of the parent, with child tasks (level = Task) for unit/integration tests.
+
+This yields a single requirement linked to a parent work item, with second-level work items for planning, implementation, and testing, each with task-level children.
 
 ### Summary
 
