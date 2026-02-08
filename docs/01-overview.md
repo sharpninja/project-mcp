@@ -18,6 +18,66 @@ Build an MCP server that gives an AI assistant the ability to manage software pr
 
 **Storage:** PostgreSQL database. The design will allow adding GitHub, Jira, or other backends later (e.g. sync or alternative store).
 
+## Use case diagram
+
+```mermaid
+usecaseDiagram
+  actor "Project Manager" as PM
+  actor "Team Member" as TM
+  actor "AI Agent\n(Copilot/Cursor)" as AI
+  actor "Admin/SUDO" as SUDO
+
+  rectangle "Project MCP System" {
+    (Manage projects) as UC1
+    (Plan milestones/releases) as UC2
+    (Manage requirements/work items/tasks) as UC3
+    (Track issues) as UC4
+    (Access docs) as UC5
+    (Use work queue) as UC6
+    (Administer enterprises) as UC7
+  }
+
+  PM --> UC1
+  PM --> UC2
+  PM --> UC3
+  PM --> UC4
+  PM --> UC5
+  PM --> UC6
+
+  TM --> UC3
+  TM --> UC4
+  TM --> UC6
+
+  AI --> UC1
+  AI --> UC2
+  AI --> UC3
+  AI --> UC4
+  AI --> UC5
+  AI --> UC6
+
+  SUDO --> UC7
+
+  actor "MCP Server" as MCP
+  actor "Web App" as WEB
+  actor "Mobile App" as MOB
+  actor "PostgreSQL" as DB
+  actor "GitHub OAuth2" as OAUTH
+
+  UC1 --> MCP
+  UC2 --> MCP
+  UC3 --> MCP
+  UC4 --> MCP
+  UC5 --> MCP
+  UC6 --> MCP
+  UC7 --> MCP
+
+  MCP --> DB
+  WEB --> MCP
+  MOB --> MCP
+  WEB --> OAUTH
+  MOB --> OAUTH
+```
+
 ## Scope
 
 - **In scope:** Enterprise as top-level ownership; full project management (tasks, planning, docs, metadata, tech stack) under enterprises, with PostgreSQL as the primary store.
