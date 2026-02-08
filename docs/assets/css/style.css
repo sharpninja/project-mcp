@@ -1,5 +1,9 @@
-/* GitHub light styling: chrome around markdown-body (content uses github-markdown-css) */
+/* GitHub light styling: force light mode (content uses github-markdown-light) */
 * { box-sizing: border-box; }
+
+html {
+  color-scheme: light;
+}
 
 body {
   margin: 0;
@@ -10,17 +14,16 @@ body {
   background: #ffffff;
 }
 
-.wrapper {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 0 16px;
-}
-
-/* Header — GitHub light bar */
+/* Header — full width */
 .site-header {
   background: #f6f8fa;
   border-bottom: 1px solid #d0d7de;
-  padding: 16px 0;
+  padding: 16px 24px;
+}
+
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
 .site-title {
@@ -48,9 +51,97 @@ body {
   text-decoration: underline;
 }
 
+/* Layout: sidebar + content */
+.layout-container {
+  display: flex;
+  max-width: 1280px;
+  margin: 0 auto;
+  min-height: calc(100vh - 120px);
+}
+
+/* Sidebar — TOC and doc list */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  padding: 24px 16px 24px 24px;
+  border-right: 1px solid #d0d7de;
+  background: #fafbfc;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #656d76;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+}
+
+.doc-nav ul,
+.toc-nav ul {
+  list-style: none;
+  margin: 0 0 24px 0;
+  padding: 0;
+}
+
+.doc-nav ul:last-child,
+.toc-nav ul {
+  margin-bottom: 0;
+}
+
+.doc-nav li,
+.toc-nav li {
+  margin: 0;
+  padding: 0;
+}
+
+.doc-nav a,
+.toc-nav a {
+  display: block;
+  padding: 4px 0;
+  color: #0969da;
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.doc-nav a:hover,
+.toc-nav a:hover {
+  text-decoration: underline;
+}
+
+.doc-nav a.active {
+  font-weight: 600;
+  color: #1f2328;
+}
+
+.toc-nav li.toc-h3 {
+  padding-left: 12px;
+}
+
+.toc-nav a {
+  color: #656d76;
+}
+
+.toc-nav a:hover {
+  color: #0969da;
+}
+
 /* Main content area */
 .page-content {
-  padding: 24px 0 40px;
+  flex: 1;
+  min-width: 0;
+  padding: 24px 40px 40px 32px;
+}
+
+.content-inner {
+  max-width: 980px;
 }
 
 .post-header {
@@ -66,7 +157,7 @@ body {
   color: #1f2328;
 }
 
-/* markdown-body from github-markdown-css handles content; we only tweak container */
+/* markdown-body from github-markdown-css handles content */
 .post-content.markdown-body {
   padding-top: 0;
 }
@@ -80,15 +171,45 @@ body {
   overflow-x: auto;
 }
 
-/* Footer — GitHub light */
+/* Footer — full width */
 .site-footer {
   border-top: 1px solid #d0d7de;
-  padding: 24px 0;
+  padding: 24px;
   font-size: 12px;
   color: #656d76;
   background: #f6f8fa;
 }
 
-.site-footer .wrapper {
-  padding: 0 16px;
+.footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Responsive: stack sidebar above content on small screens */
+@media (max-width: 768px) {
+  .layout-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    max-height: none;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid #d0d7de;
+    padding: 16px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 24px;
+  }
+
+  .doc-nav,
+  .toc-nav {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .page-content {
+    padding: 24px 16px 40px;
+  }
 }

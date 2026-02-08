@@ -384,6 +384,7 @@ FodyWeavers.xsd
 _site/
 .jekyll-cache/
 .jekyll-metadata
+vendor/
 
 # OS
 .DS_Store

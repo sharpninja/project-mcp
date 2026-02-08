@@ -6,6 +6,9 @@ url: "https://sharpninja.github.io"
 markdown: kramdown
 highlighter: rouge
 
+plugins:
+  - jekyll-relative-links
+
 defaults:
   - scope:
       path: ""

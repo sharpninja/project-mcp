@@ -66,6 +66,6 @@ Slugs are used in the UI, in references in text, and for traceability (e.g. “s
 
 ## Data model impact
 
-- Every entity table has: (1) **id** (GUID, primary key, immutable), (2) **display_id** or **slug** (hierarchical, derived from owner + type prefix + unique integer index), and (3) the **unique integer index** stored or derived as the numeric part of the slug segment, allocated per owner per type. See [03 — Data Model](03-data-model.md).
+- Every entity table has: (1) **id** (GUID, primary key, immutable), (2) **display_id** or **slug** (hierarchical, derived from owner + type prefix + unique integer index), and (3) the **unique integer index** stored or derived as the numeric part of the slug segment, allocated per owner per type. See [03 — Data Model](03-data-model.html).
 - For entities with polymorphic parents, the parent is identified by **parent slug** when building the child’s slug; FKs may point to the specific parent row, but the slug is built from the parent’s current slug.
 - **Slug updates** must be implemented in a single transaction: when an entity’s slug is changed, recalculate and update all descendant slugs in the same transaction; on any failure, roll back the entire change.

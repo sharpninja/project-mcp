@@ -10,7 +10,7 @@ This document identifies gaps in the current design **on its own terms**: missin
 
 ## Definitions lacking placement in the hierarchy
 
-Placement in the hierarchy means: (1) an explicit **owner** (parent entity), (2) a **type prefix** for the slug, and (3) a **slug example** or rule in [08 — Identifiers](08-identifiers.md). The following definitions **lack placement** (no owner + prefix + slug convention):
+Placement in the hierarchy means: (1) an explicit **owner** (parent entity), (2) a **type prefix** for the slug, and (3) a **slug example** or rule in [08 — Identifiers](08-identifiers.html). The following definitions **lack placement** (no owner + prefix + slug convention):
 
 | Definition   | Owner / placement | Type prefix in 08? | Slug example in 08? | Lacks placement? |
 |-------------|-------------------|--------------------|----------------------|-------------------|
@@ -31,13 +31,13 @@ Placement in the hierarchy means: (1) an explicit **owner** (parent entity), (2)
 | Resource    | Enterprise or Project | Not specified | None             | **Yes**           |
 | Doc         | Not in 00; schema has project_id | Not specified | None    | **Yes** (and no definition) |
 
-**Summary — definitions that lack placement in the hierarchy:** Milestone, Release, Domain, Issue, Keyword, Asset, Resource, Doc. Of these, **Release** and **Doc** also lack a definition in [00 — Definitions](00-definitions.md). (**Task** now has placement: owned by work item or task, prefix TSK, six-digit zero-padded index.)
+**Summary — definitions that lack placement in the hierarchy:** Milestone, Release, Domain, Issue, Keyword, Asset, Resource, Doc. Of these, **Release** and **Doc** also lack a definition in [00 — Definitions](00-definitions.html). (**Task** now has placement: owned by work item or task, prefix TSK, six-digit zero-padded index.)
 
 ---
 
 ## 1. Entities defined but not persisted
 
-**Domain** — Defined as a collection of requirements pertaining to a single silo of a project. There is no `domains` table, no `domain_id` on requirements, and no slug/identifier convention for domains in [08 — Identifiers](08-identifiers.md). Domain appears only in the entity_keywords entity-type list.
+**Domain** — Defined as a collection of requirements pertaining to a single silo of a project. There is no `domains` table, no `domain_id` on requirements, and no slug/identifier convention for domains in [08 — Identifiers](08-identifiers.html). Domain appears only in the entity_keywords entity-type list.
 
 **Asset** — Defined as intellectual property belonging to the enterprise (documentation, diagrams, images, video, audio, etc.). There is no `assets` table or storage. No link from project or work to assets. No slug/identifier convention for assets.
 
@@ -51,7 +51,7 @@ Placement in the hierarchy means: (1) an explicit **owner** (parent entity), (2)
 
 **Sub-work** — The design refers to “tasks and sub-work” under a work item and “all tasks and sub-work” for assignment inheritance. “Sub-work” is not defined. The model has work → work items and work → tasks; there is no work item → child work items. It is unclear whether sub-work means tasks under the work item, or an undefined hierarchy.
 
-**Release** — Releases appear in the schema and in planning (name, tag_version, date, notes) but there is **no definition** of Release in [00 — Definitions](00-definitions.md). The relationship of a release to milestones, requirements, or work is not defined.
+**Release** — Releases appear in the schema and in planning (name, tag_version, date, notes) but there is **no definition** of Release in [00 — Definitions](00-definitions.html). The relationship of a release to milestones, requirements, or work is not defined.
 
 ---
 
@@ -93,7 +93,7 @@ Placement in the hierarchy means: (1) an explicit **owner** (parent entity), (2)
 
 ## 7. Identifiers and slugs
 
-**Missing type prefixes and ownership rules** — [08 — Identifiers](08-identifiers.md) defines E, P, REQ, STD, W, WI and states that “Task, Domain, Asset, Resource, Sub-project, etc.” will have their own prefixes. Prefixes and ownership rules for **Issue, Domain, Asset, Resource, Release** (and Task) are not specified. So those entities lack identifier conventions.
+**Missing type prefixes and ownership rules** — [08 — Identifiers](08-identifiers.html) defines E, P, REQ, STD, W, WI and states that “Task, Domain, Asset, Resource, Sub-project, etc.” will have their own prefixes. Prefixes and ownership rules for **Issue, Domain, Asset, Resource, Release** (and Task) are not specified. So those entities lack identifier conventions.
 
 ---
 

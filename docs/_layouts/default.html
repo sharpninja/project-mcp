@@ -1,40 +1,77 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-color-mode="light" data-light-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if page.title %}{{ page.title }} — {% endif %}{{ site.title }}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.css">
   <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 </head>
 <body>
   <header class="site-header">
-    <div class="wrapper">
+    <div class="header-inner">
       <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
       <nav class="site-nav">
         <a href="{{ '/' | relative_url }}">Docs</a>
       </nav>
     </div>
   </header>
-  <main class="page-content">
-    <div class="wrapper">
-      <article class="post">
-        <header class="post-header">
-          <h1 class="post-title">{{ page.title | default: "Documentation" }}</h1>
-        </header>
-        <div class="post-content markdown-body">
-          {{ content }}
-        </div>
-      </article>
-    </div>
-  </main>
+  <div class="layout-container">
+    <aside class="sidebar">
+      <nav class="doc-nav">
+        <div class="sidebar-title">Documents</div>
+        <ul>
+          {% assign doc_pages = site.pages | where_exp: "p", "p.title != nil" | where_exp: "p", "p.url != nil" | sort: "url" %}
+          {% for p in doc_pages %}
+            {% unless p.url contains "/assets/" or p.url contains "Gemfile" or p.url contains "_config" %}
+            <li><a href="{{ p.url | relative_url }}" {% if p.url == page.url %}class="active"{% endif %}>{{ p.title }}</a></li>
+            {% endunless %}
+          {% endfor %}
+        </ul>
+      </nav>
+      <nav class="toc-nav" aria-label="On this page">
+        <div class="sidebar-title">On this page</div>
+        <ul id="toc-list"></ul>
+      </nav>
+    </aside>
+    <main class="page-content">
+      <div class="content-inner">
+        <article class="post">
+          <header class="post-header">
+            <h1 class="post-title">{{ page.title | default: "Documentation" }}</h1>
+          </header>
+          <div class="post-content markdown-body">
+            {{ content }}
+          </div>
+        </article>
+      </div>
+    </main>
+  </div>
   <footer class="site-footer">
-    <div class="wrapper">
+    <div class="footer-inner">
       <p>Project MCP design documentation</p>
     </div>
   </footer>
   <script>
+    (function() {
+      var content = document.querySelector('.post-content');
+      var tocList = document.getElementById('toc-list');
+      if (!content || !tocList) return;
+      var headings = content.querySelectorAll('h2, h3');
+      if (headings.length === 0) { tocList.closest('.toc-nav').style.display = 'none'; return; }
+      headings.forEach(function(h) {
+        var id = h.id || h.textContent.replace(/\s+/g, '-').replace(/[^a-z0-9-]/gi, '').toLowerCase();
+        if (!h.id) h.id = id;
+        var li = document.createElement('li');
+        li.className = 'toc-' + h.tagName.toLowerCase();
+        var a = document.createElement('a');
+        a.href = '#' + id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        tocList.appendChild(li);
+      });
+    })();
     mermaid.initialize({ theme: 'default', securityLevel: 'loose' });
     document.querySelectorAll('pre code.language-mermaid').forEach(function(el) {
       var pre = el.parentElement;

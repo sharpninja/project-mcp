@@ -6,16 +6,112 @@ title: Data Model
 
 All entities are persisted in PostgreSQL. The same logical model can be mapped to external systems (e.g. GitHub Issues) for future integrations. **Methodology neutrality:** The data model does not assume or impose any specific methodology (agile or otherwise); it is methodology-agnostic.
 
-**Hierarchy:** Enterprise (top-level ownership) → Project → tasks, milestones, releases, docs. See [00 — Definitions](00-definitions.md). The project methodology does not include sprints.
+**Hierarchy:** Enterprise (top-level ownership) → Project → tasks, milestones, releases, docs. See [00 — Definitions](00-definitions.html). The project methodology does not include sprints.
 
-**Identifiers:** All entities follow the same pattern: an **immutable key (GUID)**, a **hierarchical slug**, and a **unique integer index** (the numeric part of the slug segment, per owner per type). See [08 — Identifiers](08-identifiers.md). For entities that may have parents of different types (e.g. task under work item or task; requirement under project or requirement), the parent is **identified by the parent’s slug** when building the child’s slug. When an entity’s slug changes, **all descendant slugs must be updated in the same transaction**; if the transaction fails, the entity’s slug change is rolled back (no partial updates).
+**Identifiers:** All entities follow the same pattern: an **immutable key (GUID)**, a **hierarchical slug**, and a **unique integer index** (the numeric part of the slug segment, per owner per type). See [08 — Identifiers](08-identifiers.html). For entities that may have parents of different types (e.g. task under work item or task; requirement under project or requirement), the parent is **identified by the parent’s slug** when building the child’s slug. When an entity’s slug changes, **all descendant slugs must be updated in the same transaction**; if the transaction fails, the entity’s slug change is rolled back (no partial updates).
 
 **Keywords:** All entities have a collection of zero or more **keywords**. Keywords are stored in a separate table and scoped to a single enterprise. Entity–keyword relationships reference the keywords table with the **foreign key including the enterprise the entity belongs to**, so an entity can only be linked to keywords from its own enterprise.
 
+## Data model diagram
+
+The following diagram shows the main entities and their relationships. All entities include `id` (GUID) and `display_id` (slug); see [08 — Identifiers](08-identifiers.html). Optional or nullable FKs are shown as zero-or-one (`|o`) on the optional side.
+
+```mermaid
+erDiagram
+    enterprise ||--o{ project : "owns"
+    enterprise ||--o{ domain : "owns"
+    enterprise ||--o{ system : "owns"
+    enterprise ||--o{ asset : "owns"
+    enterprise ||--o{ resource : "owns"
+    enterprise ||--o{ milestone : "owns"
+    enterprise ||--o{ standard : "enterprise-level"
+    enterprise ||--o{ keyword : "scoped to"
+
+    project ||--o{ work : "contains"
+    project ||--o{ requirement : "contains"
+    project ||--o{ release : "contains"
+    project }o--o{ project : "project_dependencies"
+
+    domain ||--o| requirement : "domain_id"
+    system }o--o{ requirement : "system_requirement_assoc"
+    requirement }o--o{ requirement : "parent_requirement"
+    requirement }o--o| milestone : "milestone_id"
+
+    work ||--o{ work_item : "contains"
+    work ||--o{ task : "contains"
+    work }o--o| resource : "resource_id"
+
+    work_item ||--o{ work_queue_item : "has"
+    work_item }o--o| resource : "resource_id"
+    work_item }o--o{ requirement : "work_item_requirements"
+    work_item }o--o| issue : "work_item_id"
+
+    task }o--o| work_item : "work_item_id"
+    task }o--o| work : "work_id"
+    task }o--o| task : "parent_task_id"
+    task }o--o{ task : "task_dependencies"
+    task }o--o| resource : "resource_id"
+
+    work_queue_item }o--o| work : "work_id"
+    work_queue_item }o--o| task : "task_id"
+
+    issue }o--o{ requirement : "issue_requirements"
+    issue }o--o| resource : "resource_id"
+
+    resource }o--o{ resource : "resource_team_members"
+
+    asset }o--o| asset : "thumbnail_asset_id"
+    asset }o--|| asset_type : "asset_type_id"
+
+    entity_keywords }o--|| keyword : "keyword_id"
+    entity_keywords }o--|| enterprise : "enterprise_id"
+
+    enterprise {
+        uuid id PK
+        string display_id
+        string name
+    }
+    project {
+        uuid id PK
+        uuid enterprise_id FK
+        string display_id
+    }
+    requirement {
+        uuid id PK
+        uuid project_id FK
+        uuid parent_requirement_id FK
+        uuid domain_id FK
+        uuid milestone_id FK
+    }
+    work {
+        uuid id PK
+        uuid project_id FK
+        uuid resource_id FK
+    }
+    work_item {
+        uuid id PK
+        uuid work_id FK
+        uuid resource_id FK
+    }
+    task {
+        uuid id PK
+        uuid work_id FK
+        uuid work_item_id FK
+        uuid parent_task_id FK
+        uuid resource_id FK
+    }
+    resource {
+        uuid id PK
+        uuid enterprise_id FK
+        string oauth2_sub
+    }
+```
+
 ## Enterprise
 
-- **Role:** Top-level hierarchy representing ownership of projects and resources (see [00 — Definitions](00-definitions.md)).
+- **Role:** Top-level hierarchy representing ownership of projects and resources (see [00 — Definitions](00-definitions.html)).
 - **Fields:** id, name, description (optional), createdAt, updatedAt. Extensible for tenant/billing metadata later.
+- **Creation rule:** **Enterprise records can only be added by a user with the SUDO role.** The API and web app must enforce this; users without SUDO cannot create enterprises (they may still view and manage enterprises/projects for which they have scope claims).
 - Projects belong to one enterprise via `enterprise_id`. Enterprises may have **standards** assigned to them (enterprise-level standards); see Standards below.
 
 ## Project
@@ -27,30 +123,31 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
 
 ## Domain
 
-- **Ownership:** Domains **belong to an enterprise**. Each domain has a **unique name within that enterprise**. The domain's slug is **enterprise slug** + hyphen + **name** (e.g. `E1-security`, `E1-billing`). See [08 — Identifiers](08-identifiers.md).
+- **Ownership:** Domains **belong to an enterprise**. Each domain has a **unique name within that enterprise**. The domain's slug is **enterprise slug** + hyphen + **name** (e.g. `E1-security`, `E1-billing`). See [08 — Identifiers](08-identifiers.html).
 - **Role:** A domain groups requirements (and the work that implements them) by a coherent area of concern. A requirement can belong to **at most one domain** or to **no domain**; stored as `domain_id` (FK, nullable) on the requirement.
 - **Fields:** id (GUID), display_id (slug), enterprise_id (FK), name (unique per enterprise), description (optional). Stored in a **domains** table.
 
 ## System
 
-- **Ownership:** Systems **belong to exactly one enterprise**. Each system has a **unique name within that enterprise**. The system's slug is **enterprise slug** + hyphen + **name** (same as Domain; e.g. `E1-payment-api`, `E1-auth-framework`). See [08 — Identifiers](08-identifiers.md).
+- **Ownership:** Systems **belong to exactly one enterprise**. Each system has a **unique name within that enterprise**. The system's slug is **enterprise slug** + hyphen + **name** (same as Domain; e.g. `E1-payment-api`, `E1-auth-framework`). See [08 — Identifiers](08-identifiers.html).
 - **Role:** A system is a collection of one or more related requirements. A requirement may be associated with a system **as included in the system** (part of the system) **or as a dependency of the system** (the system depends on that requirement). Stored in **system_requirement_associations** (system_id, requirement_id, role: `included` | `dependency`); unique (system_id, requirement_id) per association.
 - **Category:** Systems can be categorized as **Application**, **Framework**, **API**, or **Compound** (unions of the other categories). Stored as **category** (enum) on the system.
 - **Fields:** id (GUID), display_id (slug), enterprise_id (FK), name (unique per enterprise), description (optional), **category** (enum: Application, Framework, API, Compound). Stored in a **systems** table.
 
 ## Asset
 
-- **Ownership:** Assets are **linked directly to an enterprise** and have a **unique name within that enterprise**. The asset's slug is **enterprise slug** + hyphen + **name** (same as Domain and System; e.g. `E1-architecture-diagram`). See [08 — Identifiers](08-identifiers.md). **Links to assets use the immutable identifier (GUID)**, not the slug.
+- **Ownership:** Assets are **linked directly to an enterprise** and have a **unique name within that enterprise**. The asset's slug is **enterprise slug** + hyphen + **name** (same as Domain and System; e.g. `E1-architecture-diagram`). See [08 — Identifiers](08-identifiers.html). **Links to assets use the immutable identifier (GUID)**, not the slug.
 - **Asset type:** Each asset has an **asset type** from a **lookup table** (`asset_types`). Asset type has a **default icon** specified by a URN (`default_icon_urn`).
 - **URN and thumbnail:** Each asset has a **URN** to a file or online resource. An asset may **link to a thumbnail** (`thumbnail_asset_id` FK to assets, nullable); the thumbnail asset's URN is used for display. **If the asset has a thumbnail defined, the URN to the thumbnail overrides the default icon**; otherwise the asset type's default icon URN is used.
 - **Fields:** id (GUID), display_id (slug), enterprise_id (FK), name (unique per enterprise), **asset_type_id** (FK to asset_types), **urn**, **thumbnail_asset_id** (FK to assets, nullable), description (optional). Stored in an **assets** table. **asset_types** lookup: id, code (or name), **default_icon_urn** (URN for default icon).
 
 ## Resource
 
-- **Ownership:** Resources are **directly tied to one enterprise** and have a **unique name within that enterprise**. The resource's slug is **enterprise slug** + hyphen + **name** (same as Asset, Domain, System; e.g. `E1-backend-team`, `E1-jane-doe`). See [08 — Identifiers](08-identifiers.md). **Links to resources use the immutable identifier (GUID)**, not the slug.
+- **Ownership:** Resources are **directly tied to one enterprise** and have a **unique name within that enterprise**. The resource's slug is **enterprise slug** + hyphen + **name** (same as Asset, Domain, System; e.g. `E1-backend-team`, `E1-jane-doe`). See [08 — Identifiers](08-identifiers.html). **Links to resources use the immutable identifier (GUID)**, not the slug.
+- **OAuth2 identity:** A resource can have an **OAuth2 id** (e.g. **GitHub user id**, the stable identifier from GitHub as the OAuth2 provider, used by the [web app](14-project-web-app.html) and [mobile app](15-mobile-app.html)) stored in **oauth2_sub** (or equivalent). When present, the backend can resolve the authenticated user (GitHub user id from the token or GitHub API) to this resource so that “assigned to me,” task queue, and visibility are tied to the correct resource. Typically only **person** resources (not teams) have an OAuth2 id; teams are resolved via **resource_team_members** (user’s resource is a member of the team). The OAuth2 id is **unique per provider** (GitHub user id is unique within GitHub).
 - **Teams:** A resource **can be a team of other resources**. Stored in **resource_team_members** (team_id FK to resources, member_id FK to resources); unique (team_id, member_id). Work and tasks can be assigned to a team (the team is a resource) or to an individual resource.
 - **Assignment:** Work, work items, tasks, and issues reference the assigned resource by **resource_id** (FK to resources, nullable). When a work item is assigned to a resource (including a team), that assignment applies to its tasks and sub-work per assignment rules.
-- **Fields:** id (GUID), display_id (slug), enterprise_id (FK), name (unique per enterprise), description (optional). Stored in a **resources** table. **resource_team_members** — team_id (FK to resources), member_id (FK to resources). Unique (team_id, member_id).
+- **Fields:** id (GUID), display_id (slug), enterprise_id (FK), name (unique per enterprise), description (optional), **oauth2_sub** (nullable; OAuth2 subject id, e.g. GitHub user id, linking this resource to an authenticated user). Stored in a **resources** table. **resource_team_members** — team_id (FK to resources), member_id (FK to resources). Unique (team_id, member_id).
 
 ## Requirements
 
@@ -61,18 +158,18 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
 ## Standards
 
 - **Assignment:** Standards are assigned to either an **Enterprise** or a **Project** (not both). Enterprise-level standards apply across the enterprise; project-level standards apply to that project (and optionally its sub-projects).
-- **Identifiers:** GUID (immutable) and slug with the same hierarchy rules as requirements; slug is derived from the owning enterprise or project (e.g. `E1-STD0001`, `E1-P001-STD0001`). Requirements and standards each use a sequentially allocated unique index for their slug segment under a given owner — no two requirements under the same owner share the same segment, and no two standards under the same owner share the same segment. See [08 — Identifiers](08-identifiers.md).
+- **Identifiers:** GUID (immutable) and slug with the same hierarchy rules as requirements; slug is derived from the owning enterprise or project (e.g. `E1-STD0001`, `E1-P001-STD0001`). Requirements and standards each use a sequentially allocated unique index for their slug segment under a given owner — no two requirements under the same owner share the same segment, and no two standards under the same owner share the same segment. See [08 — Identifiers](08-identifiers.html).
 - **Fields:** id (GUID), display_id (slug), enterprise_id (FK, nullable) or project_id (FK, nullable), name, description, and standard-specific content or references.
 
 ## Work
 
-- **Role:** Work defines one or more tasks and/or work items to complete, with a **deadline**, **start date**, **effort in hours**, **complexity level** (1 to 5, 5 being highest), and **priority** (1 to 5, 5 being highest). See [00 — Definitions](00-definitions.md).
+- **Role:** Work defines one or more tasks and/or work items to complete, with a **deadline**, **start date**, **effort in hours**, **complexity level** (1 to 5, 5 being highest), and **priority** (1 to 5, 5 being highest). See [00 — Definitions](00-definitions.html).
 - **Structure:** One work entity has one-to-many **tasks** and/or one-to-many **work items**. Tasks and work items are the concrete items to complete; work is the parent that carries the schedule and effort attributes. **Work items** have **states** (same as milestones): Planning, Implementation, Deployment, Validation, Approval, Complete. A work item may have an associated set of **requirements** (e.g. work_item_requirements or derived from tasks/issue associations); **assigning an issue to a work item may expand** that set (see Issues). Tasks can optionally belong to a work item (task.work_item_id). **Within a work item, tasks may be ordered** (a defined sequence to complete) **or allowed to be completed in parallel**; the work item has a mode (e.g. `task_ordering`: `ordered` | `parallel`) and, when ordered, each task has a sequence number within that work item.
 - **Fields (work):** id (GUID), display_id (slug), project_id (FK), deadline (nullable), start_date (nullable), effort_hours (nullable), complexity (1–5), priority (1–5), **resource_id** (FK to resources, nullable; assigned resource; links use immutable id), **state** (optional; same enum as milestones and work items: Planning, Implementation, Deployment, Validation, Approval, Complete — used when work is associated with milestone requirements for progression checks), and any title/description. Tasks reference work via `work_id` (FK, nullable) and optionally a work item via `work_item_id` (FK, nullable). Work items have their own table with `work_id` (FK), **task_ordering** (`ordered` | `parallel`), and **resource_id** (FK to resources, nullable; when set, all tasks and sub-work under the work item are assigned to that resource per assignment rules; links use immutable id). Each work item has a **work queue** (see below).
 
 ## Tasks
 
-- **Ownership:** Tasks are **owned by work items or other tasks**. The owner for hierarchy and slug is the **parent task** (if `parent_task_id` is set) or the **work item** (if `work_item_id` is set). Sub-tasks use `parent_task_id`; tasks directly under a work item use `work_item_id` without a parent task. See [08 — Identifiers](08-identifiers.md) (prefix **TSK**, six-digit zero-padded index).
+- **Ownership:** Tasks are **owned by work items or other tasks**. The owner for hierarchy and slug is the **parent task** (if `parent_task_id` is set) or the **work item** (if `work_item_id` is set). Sub-tasks use `parent_task_id`; tasks directly under a work item use `work_item_id` without a parent task. See [08 — Identifiers](08-identifiers.html) (prefix **TSK**, six-digit zero-padded index).
 - **Fields:** id, title, description, status (`todo` | `in-progress` | `done` | `cancelled`), priority (number), **resource_id** (FK to resources, nullable; assigned resource; links use immutable id), labels (string[]), milestoneId, releaseId (nullable refs), **work_id** (FK, nullable), **work_item_id** (FK, nullable), **parent_task_id** (FK, nullable; when set, task is a sub-task owned by that task), **sequence_in_work_item** (nullable int; used when work item’s task_ordering is `ordered`), createdAt, updatedAt.
 - **Task-to-task dependencies** — Tasks can be dependent on other tasks (e.g. a task cannot start or be completed until its prerequisite tasks are done). Tracked with a relationship from the dependent task to one or more prerequisite tasks: **task_dependencies** (dependent_task_id, prerequisite_task_id). One dependent task can have zero or more prerequisite tasks. Unique (dependent_task_id, prerequisite_task_id). (Dependency is separate from ownership: a task can depend on a sibling or another task without being its child.)
 - **Ordering within a work item** — Tasks may be associated with a work item (work_item_id). The work item has **task_ordering** (`ordered` | `parallel`): when `ordered`, tasks have a **sequence_in_work_item** and are intended to be completed in that order; when `parallel`, tasks under that work item can be completed in any order.
@@ -80,7 +177,7 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
 
 ## Work queue
 
-- **Role:** Each work item has a **work queue** — an ordered list of items (work and/or tasks) in the order they are to be completed. See [00 — Definitions](00-definitions.md) (Work item).
+- **Role:** Each work item has a **work queue** — an ordered list of items (work and/or tasks) in the order they are to be completed. See [00 — Definitions](00-definitions.html) (Work item).
 - **Queue items:** Each entry in the queue is either (a) a reference to **work**, or (b) one or more **tasks** at the same **queue depth**. Tasks at equal queue depth are **grouped as a single work queue item** (e.g. several tasks that can be done in parallel appear as one slot in the queue). Stored as **work_queue_items**: work_item_id, position (int, order in queue), work_id (FK, nullable), task_id (FK, nullable). For a work reference: one row with work_id set, task_id null. For a single task: one row with task_id set, work_id null. For a group of tasks at the same depth: multiple rows with the same work_item_id and position, each with a different task_id (work_id null).
 - **Filtering by resource:** Work queues can be **filtered by resource** (e.g. show only queue items where the task or work involves a given resource/assignee). Filtering is applied when querying or presenting the queue; the underlying queue order and grouping are unchanged.
 
@@ -90,9 +187,9 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
 - **Unassign and reassign:** Work and tasks can be **unassigned** or **reassigned** to a different resource at any time. Reassigning a work item may cascade to its tasks and sub-work per the rule above; individual tasks and work can still be overridden to a different resource or unassigned.
 - **Blocking:** **Unassigned work or tasks that have dependent work or tasks become blockers** to those dependent items. A prerequisite (work or task) that is unassigned blocks progress on any work or task that depends on it. This applies **even if the dependent items are assigned to a resource** — the dependent remains blocked until the prerequisite is assigned (and completed, per dependency rules) or the dependency is removed. Blocking is derived from: (1) dependency relationship (e.g. task_dependencies, or work/work item dependencies), and (2) prerequisite is unassigned.
 
-- **Issues:** An **issue** is a defect in planning or implementation associated with one or more requirements (see [00 — Definitions](00-definitions.md)). **Link to work item and assignment:** If the issue is associated with **open work** on one or more of its requirements, the issue is **linked to that work item** (issue.work_item_id) and **assigned to the resource** assigned to that work (assignment inherited from work item). Otherwise, the issue is **freely associated with the requirement(s)** only (no work_item_id) until a work item is created and the issue is assigned to it. **Expanding requirements:** Assigning an issue to a work item **may expand the set of requirements** associated with that work item (the work item’s scope gains the issue’s requirement associations). Stored as: **issues** (id, display_id, work_item_id FK nullable, assignee(s) nullable, title, description, state/status, …); **issue_requirements** (issue_id, requirement_id) for the one-to-many issue–requirement link. Work item may have a derived or stored set of requirement associations that grows when issues are assigned to it.
+- **Issues:** An **issue** is a defect in planning or implementation associated with one or more requirements (see [00 — Definitions](00-definitions.html)). **Link to work item and assignment:** If the issue is associated with **open work** on one or more of its requirements, the issue is **linked to that work item** (issue.work_item_id) and **assigned to the resource** assigned to that work (assignment inherited from work item). Otherwise, the issue is **freely associated with the requirement(s)** only (no work_item_id) until a work item is created and the issue is assigned to it. **Expanding requirements:** Assigning an issue to a work item **may expand the set of requirements** associated with that work item (the work item’s scope gains the issue’s requirement associations). Stored as: **issues** (id, display_id, work_item_id FK nullable, assignee(s) nullable, title, description, state/status, …); **issue_requirements** (issue_id, requirement_id) for the one-to-many issue–requirement link. Work item may have a derived or stored set of requirement associations that grows when issues are assigned to it.
 
-- **Milestones:** A **milestone** is a collection of requirements within an enterprise that spans zero or more projects and that are to be completed (see [00 — Definitions](00-definitions.md)). Id, title, dueDate (nullable), **state** (enum: Planning, Implementation, Deployment, Validation, Approval, Complete), description. Milestones belong to an enterprise (enterprise_id). **The relationship between a milestone and a project is not a hard link, but inferred through requirements**: requirements link to a milestone (requirement.milestone_id) and belong to a project (requirement.project_id); the set of projects “in” a milestone is therefore derived from the projects of the requirements that reference that milestone. **Reporting scope:** A milestone may be **scoped to a single project and its sub-projects** for reporting; that scope **filters the requirements** associated with the milestone (only requirements in that project or its sub-projects that are linked to the milestone are included). **State progression:** A milestone may move to the next state only when **all work associated with the requirements for that milestone** (within the scope, when scoped) **has achieved that next state**. Work items use the same state enum; work and tasks may use it or a mapping so that milestone progression can be evaluated.
+- **Milestones:** A **milestone** is a collection of requirements within an enterprise that spans zero or more projects and that are to be completed (see [00 — Definitions](00-definitions.html)). Id, title, dueDate (nullable), **state** (enum: Planning, Implementation, Deployment, Validation, Approval, Complete), description. Milestones belong to an enterprise (enterprise_id). **The relationship between a milestone and a project is not a hard link, but inferred through requirements**: requirements link to a milestone (requirement.milestone_id) and belong to a project (requirement.project_id); the set of projects “in” a milestone is therefore derived from the projects of the requirements that reference that milestone. **Reporting scope:** A milestone may be **scoped to a single project and its sub-projects** for reporting; that scope **filters the requirements** associated with the milestone (only requirements in that project or its sub-projects that are linked to the milestone are included). **State progression:** A milestone may move to the next state only when **all work associated with the requirements for that milestone** (within the scope, when scoped) **has achieved that next state**. Work items use the same state enum; work and tasks may use it or a mapping so that milestone progression can be evaluated.
 - **Releases:** id, name, tagVersion, date (nullable), notes.
 
 ## Keywords
@@ -101,16 +198,28 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
 - **Entity relationship** — Every entity type (enterprise, project, requirement, standard, work, work_item, task, milestone, release, doc, asset, resource, domain, system, issue, etc.) can have zero or more keywords. The relationship table includes the **enterprise the entity belongs to** in the foreign key so that: (1) the entity’s enterprise is stored on the link row, and (2) the keyword’s enterprise must match, ensuring entities only reference keywords from their enterprise.
 - **Tables** — `keywords` (id, enterprise_id, label); `entity_keywords` (enterprise_id, entity_type, entity_id, keyword_id) with unique (entity_type, entity_id, keyword_id) and FKs such that keyword.enterprise_id = entity_keywords.enterprise_id.
 
+## Change tracking
+
+- **Requirement:** **Change tracking must be enabled on all fields of all entities** in the database. Every insert, update, and delete to entity data must be recorded so that what changed, when, and (where available) by whom can be determined.
+- **Scope:** Applies to all entity tables (enterprise, project, task, milestone, release, work, work_item, requirement, resource, domain, system, asset, issue, standards, keywords, docs, and junction tables such as project_dependencies, task_dependencies, entity_keywords, etc.). **All columns** of these tables are in scope; no field may be excluded from change tracking.
+- **Context to record:** Each change record must include, when available:
+  - **Session identifier** — The session that made the change (e.g. MCP `context_key`, or web/API session id). Enables correlating changes to a specific connection or login session.
+  - **Resource identifier** — The resource (person, team, or agent) who made the change (e.g. `resource_id` FK to resources, resolved from the authenticated user or agent). Enables “who did this” and audit by actor.
+  - **Correlation id** — The correlation id of the request, if the client sent one (e.g. `X-Correlation-Id` or `MCP-Correlation-Id`). Enables grouping all changes that are part of the same logical request or user action.
+  - **Changed_at** (and optionally old/new value or full row state) as before.
+- **Implementation options:** Implement via one or more of: (1) **audit/history tables** (e.g. per entity or a generic audit table with entity_type, entity_id, field_name, old_value, new_value, **session_id**, **resource_id** (FK nullable), **correlation_id**, changed_at), (2) **database triggers** that write to audit tables on INSERT/UPDATE/DELETE (session/resource/correlation_id must be supplied by the application, e.g. via session variables or a context table), (3) **application-level** writes to an audit log before or after persistence, passing session identifier, resource identifier, and correlation id from the request context, or (4) **system-versioned / temporal tables** plus application-managed context columns where supported. The chosen mechanism must record the previous and new value (or full row state) for every modified field and must include **session identifier**, **resource identifier**, and **correlation id** (nullable when not provided) on every change record.
+- **Retention and access:** Retention policy and access to change history are operational concerns (e.g. how long to keep audit rows, who can query them). The schema and application must support recording; query APIs for audit history can be added later.
+
 ## PostgreSQL persistence
 
 - **Database** — PostgreSQL. Connection via configuration (e.g. env `DATABASE_URL` or `PROJECT_MCP_CONNECTION_STRING`).
-- **Tables** (or equivalent schema). Each entity has `id` (GUID, PK) and `display_id` (slug, unique); see [08 — Identifiers](08-identifiers.md). For entities with polymorphic parents, the child’s slug is derived from the **parent’s slug**; slug changes and all descendant slug updates must run in a **single transaction** (roll back entire change on failure).
-  - **enterprise** — id (GUID), display_id (slug, e.g. E1), name, description, created_at, updated_at. Top-level ownership (see [00 — Definitions](00-definitions.md)).
-  - **domains** — id (GUID), display_id (slug, e.g. E1-security, E1-billing), enterprise_id (FK), name (unique per enterprise), description (optional). Domain slug = enterprise slug + hyphen + name. See [08 — Identifiers](08-identifiers.md).
-  - **systems** — id (GUID), display_id (slug, e.g. E1-payment-api, E1-auth-framework), enterprise_id (FK), name (unique per enterprise), description (optional), **category** (enum: Application, Framework, API, Compound). System slug = enterprise slug + hyphen + name; same as Domain. See [08 — Identifiers](08-identifiers.md).
+- **Tables** (or equivalent schema). Change tracking (see above) must be enabled for all entity tables and all fields. Each entity has `id` (GUID, PK) and `display_id` (slug, unique); see [08 — Identifiers](08-identifiers.html). For entities with polymorphic parents, the child’s slug is derived from the **parent’s slug**; slug changes and all descendant slug updates must run in a **single transaction** (roll back entire change on failure).
+  - **enterprise** — id (GUID), display_id (slug, e.g. E1), name, description, created_at, updated_at. Top-level ownership (see [00 — Definitions](00-definitions.html)).
+  - **domains** — id (GUID), display_id (slug, e.g. E1-security, E1-billing), enterprise_id (FK), name (unique per enterprise), description (optional). Domain slug = enterprise slug + hyphen + name. See [08 — Identifiers](08-identifiers.html).
+  - **systems** — id (GUID), display_id (slug, e.g. E1-payment-api, E1-auth-framework), enterprise_id (FK), name (unique per enterprise), description (optional), **category** (enum: Application, Framework, API, Compound). System slug = enterprise slug + hyphen + name; same as Domain. See [08 — Identifiers](08-identifiers.html).
   - **asset_types** — id (GUID or code), code (e.g. document, image, video), **default_icon_urn** (URN for default icon). Lookup table for asset types.
-  - **assets** — id (GUID), display_id (slug, e.g. E1-architecture-diagram), enterprise_id (FK), name (unique per enterprise), **asset_type_id** (FK to asset_types), **urn** (to file or online resource), **thumbnail_asset_id** (FK to assets, nullable; when set, this asset's thumbnail is that asset's URN; overrides default icon for display), description (optional). Asset slug = enterprise slug + hyphen + name. Links to assets use id (GUID). See [08 — Identifiers](08-identifiers.md).
-  - **resources** — id (GUID), display_id (slug, e.g. E1-backend-team, E1-jane-doe), enterprise_id (FK), name (unique per enterprise), description (optional). Resource slug = enterprise slug + hyphen + name; same as Asset. Links to resources use id (GUID). A resource can be a team (see resource_team_members). See [08 — Identifiers](08-identifiers.md).
+  - **assets** — id (GUID), display_id (slug, e.g. E1-architecture-diagram), enterprise_id (FK), name (unique per enterprise), **asset_type_id** (FK to asset_types), **urn** (to file or online resource), **thumbnail_asset_id** (FK to assets, nullable; when set, this asset's thumbnail is that asset's URN; overrides default icon for display), description (optional). Asset slug = enterprise slug + hyphen + name. Links to assets use id (GUID). See [08 — Identifiers](08-identifiers.html).
+  - **resources** — id (GUID), display_id (slug, e.g. E1-backend-team, E1-jane-doe), enterprise_id (FK), name (unique per enterprise), description (optional), **oauth2_sub** (nullable; OAuth2 subject id, e.g. GitHub user id, so the backend can resolve the authenticated user to this resource). Resource slug = enterprise slug + hyphen + name; same as Asset. Links to resources use id (GUID). A resource can be a team (see resource_team_members). See [08 — Identifiers](08-identifiers.html).
   - **resource_team_members** — team_id (FK to resources), member_id (FK to resources). Unique (team_id, member_id). A resource that is a team has one or more member resources.
   - **project** — id (GUID), display_id (slug, e.g. E1-P001), enterprise_id (FK), metadata (name, description, status, createdAt, updatedAt), tech stack (JSONB or related table), and doc list (JSONB or **docs** table).
   - **project_dependencies** — dependent_project_id (FK to project), parent_project_id (FK to project). Unique (dependent_project_id, parent_project_id). One-to-many from dependent project to zero or more parent projects; the dependent project is the “one” side, the parent projects are the “many” side.
@@ -119,7 +228,7 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
   - **work_queue_items** — work_item_id (FK), position (int; order in queue), work_id (FK to work, nullable), task_id (FK to tasks, nullable). Exactly one of work_id or task_id set per row. Tasks at the same (work_item_id, position) form a single queue item (group). Unique (work_item_id, position, task_id) when task_id not null; for work refs, one row per (work_item_id, position) with work_id set.
   - **tasks** — id (GUID), display_id (slug; prefix **TSK**, six-digit zero-padded index; owner = parent_task_id if set, else work_item_id if set), project_id (FK), work_id (FK, nullable), **work_item_id** (FK, nullable), **parent_task_id** (FK, nullable; when set, task is owned by that task for hierarchy/slug), sequence_in_work_item (nullable int), title, description, status, priority, **resource_id** (FK to resources, nullable; assigned resource; links use immutable id), labels (array/JSONB), milestone_id, release_id, created_at, updated_at.
   - **task_dependencies** — dependent_task_id (FK to tasks), prerequisite_task_id (FK to tasks). Unique (dependent_task_id, prerequisite_task_id). A task can depend on zero or more other tasks; the dependent task is the “one” side, the prerequisite tasks are the “many” side.
-  - **milestones** — id (GUID), display_id (slug), enterprise_id (FK), title, due_date, **state** (enum: Planning, Implementation, Deployment, Validation, Approval, Complete), description. A milestone is a collection of requirements within the enterprise (see [00 — Definitions](00-definitions.md)). **Milestone–project relationship is inferred through requirements** (no direct FK or join table): requirements have milestone_id and project_id, so the projects associated with a milestone are those of its requirements. **Scope for reporting:** A milestone may be scoped to a single project and its sub-projects; that scope filters which requirements (and thus which work) are considered associated with the milestone for reporting and state progression. Milestone may advance to next state only when all work associated with its requirements (within scope) has achieved that state.
+  - **milestones** — id (GUID), display_id (slug), enterprise_id (FK), title, due_date, **state** (enum: Planning, Implementation, Deployment, Validation, Approval, Complete), description. A milestone is a collection of requirements within the enterprise (see [00 — Definitions](00-definitions.html)). **Milestone–project relationship is inferred through requirements** (no direct FK or join table): requirements have milestone_id and project_id, so the projects associated with a milestone are those of its requirements. **Scope for reporting:** A milestone may be scoped to a single project and its sub-projects; that scope filters which requirements (and thus which work) are considered associated with the milestone for reporting and state progression. Milestone may advance to next state only when all work associated with its requirements (within scope) has achieved that state.
   - **releases** — id (GUID), display_id (slug), project_id (FK), name, tag_version, date, notes.
   - **docs** (or embedded in project) — id (GUID), display_id (slug), project_id (FK), name, path, type, description.
   - **requirements** — id (GUID), display_id (slug, e.g. E1-P001-REQ0001 or E1-P001-REQ0001-REQ0002 for child), parent_requirement_id (FK, nullable; one parent to zero or more children), project_id (FK), domain_id (FK to domains, nullable; at most one domain per requirement; null if none), milestone_id (FK, nullable; when set, this requirement is part of that milestone’s collection), and requirement fields. Slug segment (REQ + number) is sequentially unique per owner.
@@ -127,7 +236,7 @@ All entities are persisted in PostgreSQL. The same logical model can be mapped t
   - **issue_requirements** — issue_id (FK), requirement_id (FK). Unique (issue_id, requirement_id). An issue is associated with one or more requirements. Assigning an issue to a work item may expand the work item’s set of requirements (work item gains these requirement associations; store via work_item_requirements if needed).
   - **work_item_requirements** — work_item_id (FK), requirement_id (FK). Unique (work_item_id, requirement_id). Optional: explicit set of requirements associated with a work item; expanded when an issue (with its issue_requirements) is assigned to the work item.
   - **system_requirement_associations** — system_id (FK to systems), requirement_id (FK to requirements), **role** (`included` | `dependency`). Unique (system_id, requirement_id). A requirement is either **included in** the system or a **dependency of** the system per row.
-  - **standards** — id (GUID), display_id (slug, e.g. E1-STD0001 or E1-P001-STD0001), enterprise_id (FK, nullable), project_id (FK, nullable) — exactly one of enterprise_id or project_id set. Slug segment (STD + number) is sequentially unique per owner. See [08 — Identifiers](08-identifiers.md).
+  - **standards** — id (GUID), display_id (slug, e.g. E1-STD0001 or E1-P001-STD0001), enterprise_id (FK, nullable), project_id (FK, nullable) — exactly one of enterprise_id or project_id set. Slug segment (STD + number) is sequentially unique per owner. See [08 — Identifiers](08-identifiers.html).
   - **keywords** — id (GUID), enterprise_id (FK), label (text). Scoped to a single enterprise; unique (enterprise_id, label) per enterprise.
   - **entity_keywords** — enterprise_id (FK; the enterprise the entity belongs to), entity_type (e.g. project, requirement, standard, task, domain, system, asset, resource, …), entity_id (GUID of the entity), keyword_id (FK to keywords). Unique (entity_type, entity_id, keyword_id). Enforce that keyword.enterprise_id = entity_keywords.enterprise_id so entities only link to keywords from their enterprise.
 

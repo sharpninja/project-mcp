@@ -10,13 +10,19 @@ Design and documentation for the Software Project Management MCP server.
 
 | Doc | Description |
 |-----|-------------|
-| [00 — Definitions](00-definitions.md) | Canonical terms (Enterprise, Project, Requirement, etc.) |
-| [01 — Overview](01-overview.md) | Goal, scope, and high-level concepts |
-| [02 — Architecture](02-architecture.md) | Client, MCP server, storage |
-| [03 — Data Model](03-data-model.md) | Entities, tables, PostgreSQL |
-| [04 — MCP Surface](04-mcp-surface.md) | Tools and resources |
-| [05 — Tech and Implementation](05-tech-and-implementation.md) | Implementation order |
-| [06 — Tech Requirements](06-tech-requirements.md) | Technical requirements |
-| [07 — Deployment](07-deployment.md) | Docker, Aspire, hosting |
-| [08 — Identifiers](08-identifiers.md) | GUID, slug, index rules |
-| [09 — Gaps Analysis](09-gaps-analysis.md) | Open gaps and inconsistencies |
+| [00 — Definitions](00-definitions.html) | Canonical terms (Enterprise, Project, Requirement, etc.) |
+| [01 — Overview](01-overview.html) | Goal, scope, and high-level concepts |
+| [02 — Architecture](02-architecture.html) | Client, MCP server, storage |
+| [03 — Data Model](03-data-model.html) | Entities, tables, PostgreSQL |
+| [04 — MCP Surface](04-mcp-surface.html) | Tools and resources |
+| [05 — Tech and Implementation](05-tech-and-implementation.html) | Implementation order |
+| [06 — Tech Requirements](06-tech-requirements.html) | Technical requirements |
+| [07 — Deployment](07-deployment.html) | Docker, Aspire, hosting |
+| [08 — Identifiers](08-identifiers.html) | GUID, slug, index rules |
+| [09 — Gaps Analysis](09-gaps-analysis.html) | Open gaps and inconsistencies |
+| [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html) | Activity and sequence diagrams per endpoint |
+| [11 — Implementation Plan](11-implementation-plan.html) | Phased implementation, tasks, deliverables |
+| [12 — Testing Plan](12-testing-plan.html) | Unit, integration, E2E, manual testing |
+| [13 — Deployment Plan](13-deployment-plan.html) | Local, Docker, Aspire, CI/CD, rollback |
+| [14 — Project Web App](14-project-web-app.html) | Blazor (.NET 10) website: tree, search, reports, Gantt, issues; Docker |
+| [15 — Mobile App](15-mobile-app.html) | Avalonia UI phone app: OAuth2, task queue for assigned work items |

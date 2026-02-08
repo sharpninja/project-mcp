@@ -4,6 +4,40 @@ title: MCP Surface
 
 # MCP Surface
 
+## Context key
+
+**The server issues a context key as part of the initial handshake. The agent must include this context key in all subsequent requests.**
+
+- **Issued at handshake** — When the server responds to the agent’s Initialize request (or immediately after scope is established), it includes a **context_key** in the response. The context key is an opaque value (e.g. a UUID or signed token) that uniquely identifies the session and binds it to the scope and connection state.
+- **Included on every request** — The agent **must** send the context key with **every** tool call and resource read/subscribe after the handshake. How it is sent depends on the transport: e.g. a request header (e.g. `X-Context-Key` or `MCP-Context-Key`), a parameter in the envelope, or a field in each tool/resource request. The server **instructs the agent** (via protocol or documentation) to include the context key in all requests.
+- **Validation** — The server validates the context key on each request. If the key is missing, invalid, or expired, the server returns an error and does not execute the tool or return the resource. Valid keys resolve to the session (and thus the session’s scope); the server uses that session for the operation.
+- **Session binding** — The context key ties requests to the session that completed the handshake, so the server can apply the correct scope and reject requests that do not belong to an established session.
+
+## Correlation ID
+
+**The agent may submit a correlation ID with any request to associate related requests.**
+
+- **Optional** — The agent may include a **correlation_id** (e.g. a UUID or opaque string chosen by the agent) on tool calls and resource reads. It is optional; the server does not require it.
+- **Related requests** — When the agent sends the **same correlation_id** on multiple requests, the server treats them as related (e.g. one user action that resulted in several tool calls). The server may use the correlation_id for logging, tracing, debugging, or grouping in observability tools. It does not change request semantics or authorization.
+- **Transport** — The correlation_id is sent per request (e.g. request header `X-Correlation-Id` or `MCP-Correlation-Id`, or a field in the request envelope). The server passes it through to logs/traces and does not validate or interpret its value.
+
+## Scope (enterprise / project)
+
+**The agent sets scope once; the server remembers it for that agent until the agent requests a different scope.**
+
+- **Session scope** — The MCP server associates one **current scope** (enterprise and/or project) with each agent **session** (connection). The server identifies the agent by the connection (e.g. one transport connection = one session). All tools and resources use that session’s current scope; the agent does **not** pass scope on every request.
+- **Set scope once** — The agent sets or changes scope by calling the **scope_set** tool (or by sending scope during the initial handshake when the server supports it). After that, every subsequent tool call and resource read uses that scope until the agent calls **scope_set** again with a different enterprise_id and/or project_id.
+- **Default scope** — If the agent never sets scope, the server uses a **default scope** from config (e.g. env `PROJECT_MCP_ENTERPRISE_ID`, `PROJECT_MCP_PROJECT_ID`). When no default is configured and the agent has not set scope, the server returns an error indicating scope is required.
+
+**Scope tool:**
+
+- **scope_set** — Set the current session scope. Parameters: **enterprise_id** (optional, GUID or slug), **project_id** (optional, GUID or slug). At least one must be provided when the server supports multiple enterprises/projects. The server validates the ids, stores the scope for this session, and returns the set scope (e.g. `{ enterprise_id, project_id }`). All subsequent requests from this agent use this scope until the agent calls **scope_set** again.
+- **scope_get** (optional) — Return the current session scope so the agent can confirm what scope is active without changing it.
+
+Tools and resources do **not** take scope parameters; they always operate in the session’s current scope. This avoids repeating scope on every call and lets the agent switch context only when the user asks to work in a different project or enterprise.
+
+**Enterprise scope enforcement:** Every tool and resource must **verify that any data requested or submitted is within the enterprise (and project, where applicable) the agent is associated with** via the session scope. For example: when loading a project, task, or milestone by id, confirm that the entity’s enterprise_id (or project’s enterprise_id) matches the session’s enterprise; when creating or updating, ensure the target enterprise/project is the session’s. **Any attempt to access or modify data of another enterprise** must be **rejected** (error response), **logged** with sufficient detail (e.g. tool/resource name, context_key, requested ids, target enterprise), and **followed up manually** (e.g. by operators reviewing logs for cross-enterprise access attempts). See [06 — Tech Requirements](06-tech-requirements.html) (Security and safety).
+
 ## Resources (read-only)
 
 Expose current project state so the client can load context without calling tools.
@@ -19,6 +53,11 @@ If the MCP SDK does not support query params on resource URIs, use separate reso
 ## Tools (actions)
 
 Naming: consistent `*_create`, `*_update`, `*_list` (and `*_delete` where applicable).
+
+### Scope
+
+- **scope_set** — Set the current session scope (enterprise_id and/or project_id, optional slugs). Server remembers this for the agent until the agent calls scope_set again. Returns the set scope.
+- **scope_get** — Return the current session scope (read-only; no parameters).
 
 ### Project
 

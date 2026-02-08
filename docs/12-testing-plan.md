@@ -1,0 +1,382 @@
+---
+title: Testing Plan
+---
+
+# Testing Plan
+
+This document defines a **detailed testing plan** for the Software Project Management MCP server. It covers unit, integration, end-to-end, and manual testing; test data; environments; and quality gates. It aligns with [04 — MCP Surface](04-mcp-surface.html), [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html), and [06 — Tech Requirements](06-tech-requirements.html).
+
+---
+
+## 1. Testing pyramid and objectives
+
+| Level | Purpose | Scope | Tools / approach |
+|-------|---------|--------|-------------------|
+| **Unit** | Logic in isolation; fast feedback | Handlers, validators, path resolution, DTOs | xUnit, NSubstitute/FakeItEasy |
+| **Integration** | Server + database; real I/O | Repositories, DbContext, migrations | xUnit, Testcontainers (PostgreSQL) or dedicated test DB |
+| **E2E** | Full MCP flow over stdio | Initialize, context_key, tools, resources | Script or small test client driving stdio; real or test DB |
+| **Cursor agent CLI script** | Agent-driven workflow + DB assertions | Locally running ProjectMCP; scripted prompts; DB state per step | Cursor agent CLI; prompt script; DB snapshot comparison |
+| **Manual** | UX and host integration | Cursor (or other MCP client) | Checklist; exploratory |
+
+**Objectives:**
+
+- All tool and resource endpoints have at least one happy-path test (integration or E2E).
+- Path safety (doc_read) and input validation have dedicated unit tests.
+- No secrets in tests; use env or test-specific config for DB.
+- CI runs unit and integration tests on every commit; E2E optionally on schedule or tag.
+
+---
+
+## 2. Unit tests
+
+### 2.1 Scope and responsibilities
+
+- **Handlers / service logic:** Given valid/invalid inputs, assert returned result or thrown validation.
+- **Path resolution (doc_read):** Resolve path relative to root; reject `..`, absolute paths outside root, null/empty.
+- **DTO / request parsing:** Deserialize tool arguments; validate required fields and types.
+- **Slug/ID resolution:** If implemented in a dedicated service, test slug → GUID resolution and invalid slug handling.
+
+### 2.2 Test project layout
+
+```
+tests/
+  ProjectMcp.Tests.Unit/
+    Handlers/
+      ScopeSetHandlerTests.cs
+      ProjectGetInfoHandlerTests.cs
+      ProjectUpdateHandlerTests.cs
+      TaskCreateHandlerTests.cs
+      TaskUpdateHandlerTests.cs
+      TaskListHandlerTests.cs
+      TaskDeleteHandlerTests.cs
+      MilestoneHandlerTests.cs
+      ReleaseHandlerTests.cs
+      DocRegisterHandlerTests.cs
+      DocListHandlerTests.cs
+    Services/
+      PathResolverTests.cs
+      SessionStoreTests.cs
+    Validation/
+      ProjectUpdateValidatorTests.cs
+      TaskCreateValidatorTests.cs
+```
+
+### 2.3 Key unit test cases
+
+| Area | Test case | Expected |
+|------|-----------|----------|
+| **Path resolution** | Path "spec/readme.md" with root "/repo" | Resolves to "/repo/spec/readme.md" (or equivalent), allowed. |
+| **Path resolution** | Path "../etc/passwd" | Rejected (outside root). |
+| **Path resolution** | Path "/absolute/outside/root" | Rejected. |
+| **Path resolution** | Null or empty path | Rejected. |
+| **scope_set** | Valid enterprise_id and project_id | Returns scope; session updated (mock session store). |
+| **scope_set** | Both params null/empty | Validation error. |
+| **scope_set** | Invalid GUID format | Validation error. |
+| **task_create** | Missing title | Validation error. |
+| **task_create** | Valid title, optional fields null | Success; created DTO returned (mocked store). |
+| **task_update** | Missing id | Validation error. |
+| **task_list** | Filters applied | Correct filter object passed to store (mock). |
+| **project_update** | Invalid status value | Validation error. |
+| **project_update** | Valid techStack and docs | Parsed and passed to store. |
+
+### 2.4 Tool response shape
+
+- Unit tests that assert tool **response shape** (e.g. JSON with expected keys, or error with `error` and `isError: true`) without hitting the database.
+
+### 2.5 Coverage expectations
+
+- **Target:** ≥ 80% line coverage for handler/service and path-resolution code.
+- **Exclude:** MCP SDK glue, main entry point, and trivial DTOs.
+- **CI:** Fail the build if coverage drops below a threshold (e.g. 75%) or if new code in covered areas has no tests.
+
+---
+
+## 3. Integration tests
+
+### 3.1 Scope and responsibilities
+
+- **Database:** Real PostgreSQL (Testcontainers or CI-provided service). Apply migrations before tests; optionally seed minimal data.
+- **Repositories / DbContext:** Create project, task, milestone, release, doc; read and update; delete. Assert persistence and scope (e.g. task list filtered by project_id).
+- **Session store:** If backed by DB or shared state, test context_key → scope resolution and scope_set/scope_get across "requests."
+- **Full tool flow with DB:** Call handler with valid scope and params; handler uses real repository; assert DB state and response (e.g. task_create inserts row, task_list returns it).
+
+### 3.2 Test database setup
+
+- **Option A:** Testcontainers — start Postgres container per test run or per class; run migrations; run tests; dispose.
+- **Option B:** CI service (e.g. GitHub Actions Postgres service); run migrations once; use unique schema or DB per run if parallel.
+- **Connection string:** From env (e.g. `TEST_DATABASE_URL`) or Testcontainers-generated URL. No hardcoded credentials.
+
+### 3.3 Test project layout
+
+```
+tests/
+  ProjectMcp.Tests.Integration/
+    Data/
+      ProjectRepositoryTests.cs
+      TaskRepositoryTests.cs
+      MilestoneRepositoryTests.cs
+      ReleaseRepositoryTests.cs
+      DocRepositoryTests.cs
+    HandlersWithDb/
+      ScopeIntegrationTests.cs
+      ProjectToolsIntegrationTests.cs
+      TaskToolsIntegrationTests.cs
+      PlanningToolsIntegrationTests.cs
+      DocToolsIntegrationTests.cs
+    Resources/
+      ResourceSpecIntegrationTests.cs
+      ResourceTasksIntegrationTests.cs
+      ResourcePlanIntegrationTests.cs
+```
+
+### 3.4 Key integration test cases
+
+| Area | Test case | Expected |
+|------|-----------|----------|
+| **Project** | Create project via repository; get by id | Project persisted; get returns same data. |
+| **Project** | project_update creates then updates | One row; updated fields in DB and in response. |
+| **Tasks** | task_create then task_list with no filter | List contains created task. |
+| **Tasks** | task_list with status filter | Only tasks with that status returned. |
+| **Tasks** | task_update then task_list | Updated fields reflected. |
+| **Tasks** | task_delete then task_list | Task no longer in list; get returns not found. |
+| **Milestones** | milestone_create/list/update | CRUD with enterprise scope. |
+| **Releases** | release_create/list/update | CRUD with project scope. |
+| **Docs** | doc_register then doc_list | Entry appears in list. |
+| **Scope** | scope_set with valid IDs; then project_get_info | Returns project for that project_id. |
+| **Scope** | scope_set with invalid project_id | Error; no project returned on subsequent get. |
+| **Resources** | Request project://current/spec after scope_set | Content matches project in DB for that scope. |
+| **Resources** | Request project://current/tasks | Task list matches project_id from scope. |
+
+### 3.5 Isolation and cleanup
+
+- Each test that mutates data should use a dedicated project/enterprise (e.g. unique GUID or slug) or run in a transaction that is rolled back so tests do not affect each other.
+- Avoid shared mutable state; prefer fresh DB or transaction rollback per test.
+
+---
+
+## 4. End-to-end (E2E) tests
+
+### 4.1 Scope and responsibilities
+
+- **Full MCP protocol over stdio:** Start server process; send Initialize request; receive response with context_key and tool list. Send tool calls (with context_key); assert response content. Optionally request resources.
+- **Real server process:** Either in-process server with stdio pipes or subprocess (e.g. `dotnet run`); database can be Testcontainers or dedicated E2E DB.
+
+### 4.2 E2E test flow (example)
+
+1. Start Postgres (Testcontainers or env); run migrations; optionally seed one enterprise and one project.
+2. Start MCP server process with connection string and default scope (or no default).
+3. Send Initialize (client name, version, capabilities).
+4. Parse Initialize response; extract context_key.
+5. Send scope_set(enterprise_id, project_id) with context_key; assert success and scope in response.
+6. Send project_get_info with context_key; assert project metadata (or empty).
+7. Send project_update with context_key; assert success.
+8. Send project_get_info again; assert updated data.
+9. Send task_create(title: "E2E task") with context_key; assert task in response.
+10. Send project://current/tasks resource read with context_key; assert task list contains the created task.
+11. Send task_list with context_key; assert list contains the task.
+12. Send task_update(id, status: "done"); then task_list; assert status updated.
+13. Send task_delete(id); then task_list; assert task gone.
+14. (Optional) Send milestone_create, release_create, doc_register, doc_list, doc_read with safe path; assert success.
+15. Shut down server process.
+
+### 4.3 E2E implementation options
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Subprocess** | Real deployment path | Slower; need to parse stdio. |
+| **In-process with stdio pipes** | Fast; same process | May hide process-start issues. |
+| **MCP client library** | Correct request/response format | Extra dependency; may need client SDK in test. |
+
+Recommendation: Start with subprocess and simple JSON over stdin/stdout (or use MCP client if available for .NET) so E2E truly validates the full stack.
+
+### 4.4 E2E test layout and CI
+
+- **Location:** e.g. `tests/ProjectMcp.Tests.E2E/` or a dedicated E2E solution/folder.
+- **CI:** Run on main/PR with Testcontainers Postgres; optionally run on schedule or only on release tag to keep PR feedback fast.
+- **Timeout:** E2E suite should have a global timeout (e.g. 2–5 minutes) and per-test timeouts to avoid hangs.
+
+---
+
+## 5. Cursor agent CLI script-driven integration test
+
+This test validates that a **real agent** (Cursor agent CLI), driving a **locally running ProjectMCP** instance, can "build this project in the MCP" by following a **script of prompts**. After **each prompt**, the test **compares the database state to an expected state** before submitting the next prompt. It ensures the agent’s use of tools and resources produces the intended persisted state at every step.
+
+### 5.1 Purpose and scope
+
+- **Purpose:** Confirm that the ProjectMCP server behaves correctly when consumed by the Cursor agent CLI: the agent can set scope, create/update project and tasks, milestones, releases, and docs in response to natural-language prompts, and the resulting database state matches expectations at each step.
+- **Scope:** Integration test (real agent, real local server, real database). Requires Cursor agent CLI to be available and a script that submits prompts and then runs DB assertions.
+
+### 5.2 Prerequisites
+
+| Prerequisite | Description |
+|--------------|-------------|
+| **Cursor agent CLI** | Cursor’s agent CLI (or equivalent) installed and on PATH, configured to use a locally running ProjectMCP server instance. |
+| **ProjectMCP running locally** | ProjectMCP server started with a dedicated test database (e.g. Testcontainers or a CI/local Postgres). Server must be reachable by the agent (stdio if the CLI spawns the server, or network endpoint if the CLI connects to a pre-started server). |
+| **Test database** | Empty or known initial state (migrations applied; no or minimal seed). Connection string known to both the server and the test harness for DB assertions. |
+| **Repo under test** | The “this project” to build in the MCP: the ProjectMcp repo (or a fixture repo) so prompts can reference “this project” (e.g. set up project, add tasks for implementation plan, etc.). |
+
+### 5.3 Test flow
+
+1. **Setup**
+   - Start or attach to a Postgres instance (e.g. Testcontainers); apply migrations; optionally seed one enterprise (and optionally one project) so the agent can set scope.
+   - Start the ProjectMCP server process pointing at this database (or ensure the Cursor agent CLI is configured to start/use this server).
+   - Load the **prompt script** (see below).
+   - Record **initial DB state** (e.g. row counts for project, task, milestone, release, doc; or full snapshot of relevant tables).
+
+2. **For each step in the script (in order):**
+   - **Submit prompt:** Send the next prompt from the script to the Cursor agent CLI (e.g. via CLI stdin or a driver that invokes the CLI with the prompt).
+   - **Wait for completion:** Wait until the agent has finished (CLI exits or signals completion). Use a timeout to avoid hangs.
+   - **Capture DB state:** Query the database for the state relevant to the test (e.g. all projects for the test enterprise, all tasks for the test project, milestones, releases, docs).
+   - **Compare to expected state:** Compare the captured state to the **expected state for this step** (defined in the script or a companion file). Comparison may be:
+     - Row counts and key fields (e.g. one project with name "ProjectMcp", two tasks with titles matching expected).
+     - Or a full snapshot (e.g. JSON export of project/tasks/milestones/releases/docs) diffed against a golden file.
+   - **Pass/fail:** If the state does not match the expected state, **fail the test** and optionally capture logs and DB dump for debugging. Do **not** continue to the next prompt.
+   - If the state matches, continue to the next step.
+
+3. **Teardown**
+   - Stop the server (if started by the test).
+   - Optionally tear down the database (Testcontainers dispose) or leave it for artifact collection on failure.
+
+### 5.4 Prompt script: “Build this project in the MCP”
+
+The script is a **ordered list of prompts** (and, per step, the **expected DB state** after the agent has acted on that prompt). The goal of the scenario is to have the agent “build this project in the MCP”—i.e. create and update project metadata, tasks, and planning in ProjectMCP to reflect the ProjectMcp repo (or a minimal version of it).
+
+Example structure (prompts and expectations are illustrative):
+
+| Step | Prompt (to Cursor agent CLI) | Expected DB state after step |
+|------|------------------------------|------------------------------|
+| 1 | “Set scope to enterprise … and project … (or create a project named ProjectMcp for this repo).” | Exactly one project; project name matches (e.g. "ProjectMcp"); scope can be used for subsequent steps. |
+| 2 | “Update the project with description and tech stack: .NET 8, C#, PostgreSQL, MCP.” | project row: description and tech_stack (or equivalent) populated as specified. |
+| 3 | “Add a task: ‘Scaffold MCP server and one tool’ with status todo.” | Exactly one task; title and status match. |
+| 4 | “Add a task: ‘Implement data layer and migrations’.” | Exactly two tasks; second task title matches. |
+| 5 | “List all tasks and then mark the first task as in-progress.” | Two tasks; first task status = in-progress. |
+| 6 | “Add a milestone ‘v0.1’ and a release ‘0.1.0’ for this project.” | One milestone and one release; names/identifiers match. |
+| 7 | “Register a doc: name README, path README.md, type readme.” | One doc entry for the project; name, path, type match. |
+
+The actual **prompt script** and **expected state** (e.g. JSON or table) should live in the repo (e.g. `tests/ProjectMcp.Tests.Integration/CursorAgentScript/` or similar) so they can be versioned and updated when the scenario or schema changes.
+
+### 5.5 Expected state format and comparison
+
+- **Format:** Expected state can be defined as:
+  - **Structured file (recommended):** e.g. JSON or YAML per step: `step-01-expected.json`, … listing expected entities (projects, tasks, milestones, releases, docs) with key fields (id optional, name, title, status, etc.). The test loads this file and compares to the DB snapshot (normalizing order if needed, e.g. sort by id or title).
+  - **Inline in script:** Script file has a section per step: prompt text plus expected state (table or mini-DSL).
+- **Comparison:** Compare only the fields that the agent is expected to have set (e.g. name, title, status, count). Ignore generated ids and timestamps unless they are needed for ordering. Use tolerant comparison (e.g. trim strings, ignore irrelevant tables).
+
+### 5.6 Implementation options
+
+| Approach | Description | Pros | Cons |
+|----------|-------------|------|------|
+| **CLI subprocess** | Test harness spawns Cursor agent CLI as subprocess; passes prompt via stdin or args; waits for exit; then queries DB. | Real agent; no mock. | Requires CLI installed; slower; need to parse CLI output for errors. |
+| **Script runner + driver** | Separate script (e.g. shell or Python) that runs the CLI for each prompt, then runs a DB assertion script (e.g. psql or a small .NET tool) that compares state to expected JSON. Test harness invokes the script runner and checks exit code. | Clear separation; script can be run manually. | Two pieces to maintain (prompts + assertion tool). |
+| **CI job** | Dedicated CI job that starts ProjectMCP + DB, runs the prompt script (e.g. via Cursor CLI), then runs DB assertions. | Fits CI; can run on schedule or on tag. | CI must have Cursor agent CLI available (or skip if not present). |
+
+Recommendation: Implement a **script runner** (e.g. in the test project or a `scripts/` directory) that: (1) ensures the server and DB are up, (2) runs the Cursor agent CLI for each prompt in order, (3) after each step runs a **DB assertion** (e.g. a small tool or script that queries the DB and diffs to expected state), (4) exits with non-zero if any step’s state does not match. The main test (xUnit or similar) can then invoke this runner and assert exit code zero, or the runner can be the test itself in a separate step in CI.
+
+### 5.7 Test layout and CI
+
+- **Location:** e.g. `tests/ProjectMcp.Tests.Integration/CursorAgentScript/` with:
+  - `prompts.yaml` or `prompts.json` — ordered list of { prompt, expectedStateFile }.
+  - `expected/step-01-expected.json`, etc.
+  - Runner: `RunCursorAgentScript.cs` (or a shell script `run-cursor-agent-test.sh`) that executes the flow above.
+- **CI:** Run only when Cursor agent CLI is available (e.g. optional job or conditional step); or run on schedule/nightly. Use a dedicated test DB (Testcontainers or CI Postgres) and a known-good server build (e.g. `dotnet run` or published binary).
+- **Timeout:** Per-prompt timeout (e.g. 60–120 seconds) and global script timeout (e.g. 10–15 minutes) to avoid hangs.
+
+### 5.8 Failure handling
+
+- On **state mismatch:** Fail immediately; log the prompt index, expected vs actual state (or diff); optionally capture server logs and a DB dump (e.g. pg_dump or export of relevant tables) as artifacts.
+- On **CLI timeout or crash:** Fail the test; capture stdout/stderr and server logs for debugging.
+
+---
+
+## 6. Manual testing
+
+### 6.1 Manual test checklist
+
+Use this with Cursor (or another MCP client) after deployment or before release.
+
+| # | Area | Steps | Pass criteria |
+|---|------|--------|----------------|
+| 1 | Server start | Add server to Cursor config; restart or reload | Server starts; no errors in log. |
+| 2 | Tools visible | Open MCP / tools panel | scope_set, scope_get, project_get_info, project_update, task_*, milestone_*, release_*, doc_* visible. |
+| 3 | Resources visible | Open resources or equivalent | project://current/spec, /tasks, /plan listed. |
+| 4 | scope_set | Call scope_set(enterprise_id, project_id) with valid IDs | Returns scope; no error. |
+| 5 | project_get_info | After scope_set, call project_get_info | Returns project or empty; no crash. |
+| 6 | project_update | Call project_update with name, description, status | Returns updated project; project_get_info shows changes. |
+| 7 | task_create | task_create(title: "Manual test task") | Task returned; appears in task_list and in project://current/tasks. |
+| 8 | task_update / task_delete | Update task; then delete | List reflects changes; deleted task gone. |
+| 9 | milestone_create / list | Create milestone; list | Milestone in list. |
+| 10 | release_create / list | Create release; list | Release in list. |
+| 11 | doc_register / doc_list | Register a doc; list | Doc in list. |
+| 12 | doc_read | doc_read with path under project root | Content returned. |
+| 13 | doc_read safety | Try path like "../other" (if possible) | Error, no content from outside root. |
+| 14 | Invalid context | (If client allows) Send request without or with wrong context_key | Error response; no data. |
+| 15 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
+
+### 6.2 Exploratory testing
+
+- Switch scope (scope_set to different project); verify project_get_info and task_list reflect new scope.
+- Large task list; filters (status, assignee, milestoneId); confirm performance and correctness.
+- Invalid inputs: missing title on task_create, missing id on task_update; confirm structured error and no crash.
+
+---
+
+## 7. Test data and fixtures
+
+### 7.1 Minimal seed (integration/E2E)
+
+- **Enterprise:** 1 row (e.g. id, name "Test Enterprise").
+- **Project:** 1 row (enterprise_id, name "Test Project", status active).
+- **Tasks:** 0–2 tasks (optional) for list/filter tests.
+- **Milestone:** 1 (optional) for milestone_id filter.
+- **Release:** 1 (optional) for release_id.
+
+### 7.2 Fixtures and builders
+
+- Use in-memory builders or small fixture classes to create valid DTOs (e.g. CreateTaskRequest with default title) to keep test code readable and avoid duplication.
+- No production data; all test data is synthetic and safe to delete or roll back.
+
+---
+
+## 8. Environments and configuration
+
+| Environment | Purpose | Database | Logging |
+|-------------|---------|----------|---------|
+| **Local dev** | Developer machine | Local Postgres or Docker | Console or local Seq/file |
+| **CI** | Unit + integration (and E2E) | Testcontainers or CI Postgres | Console; capture on failure |
+| **Staging / pre-prod** | Manual and E2E before release | Dedicated DB; migrations applied | Configurable sink (e.g. Seq) |
+| **Production** | Live use | Production DB | Configurable sink; no secrets in logs |
+
+- **Secrets:** Never commit connection strings or API keys. Use env vars or secret store in CI and staging/prod.
+- **Test env vars:** Document in README or CI workflow: e.g. `TEST_DATABASE_URL`, `PROJECT_MCP_ROOT` for doc_read tests.
+
+---
+
+## 9. Quality gates and CI
+
+| Gate | When | Action |
+|------|------|--------|
+| **Unit tests** | Every commit / PR | Must pass; coverage ≥ threshold for covered modules. |
+| **Integration tests** | Every commit / PR | Must pass; DB from Testcontainers or CI service. |
+| **E2E tests** | PR to main or nightly / tag | Must pass; optional for every commit if slow. |
+| **Cursor agent CLI script test** | Nightly, or when CLI available in CI | Run prompt script; assert DB state after each step; optional skip if CLI not installed. |
+| **Linting / format** | Every commit | Enforce editorconfig or dotnet format. |
+| **No secrets** | Every commit | Scan (e.g. gitleaks or CI check) for accidental secrets. |
+| **Manual checklist** | Before release | Complete manual checklist and log results. |
+
+---
+
+## 10. Summary table: what to test where
+
+| Endpoint / area | Unit | Integration | E2E | Cursor agent script | Manual |
+|-----------------|------|-------------|-----|--------------------|--------|
+| scope_set / scope_get | Handler + session store | With DB (scope → project) | Full flow with context_key | Prompt step + DB assert | Checklist |
+| project_get_info / project_update | Handlers, validation | Repository + handler | Yes | Prompt steps + DB assert | Yes |
+| task_* | Handlers, validation | Repository + handler + filters | Yes | Prompt steps + DB assert | Yes |
+| milestone_* / release_* | Handlers | Repository + handler | Optional | Prompt steps + DB assert | Yes |
+| doc_register / doc_list | Handlers | Repository + handler | Optional | Optional in script | Yes |
+| doc_read + path safety | PathResolver only | Optional (real file under root) | Optional | — | Yes (and safety) |
+| Resources (spec/tasks/plan) | — | Handler + store returns correct data | Yes (resource read) | Agent may use resources | Yes |
+| Context key validation | Middleware/handler | Reject invalid key | E2E without key | — | Try invalid key |
+| Logging (correlation_id, no secrets) | — | Optional (assert log props) | — | — | Manual check |
+
+This plan ensures coverage of all MCP endpoints, path safety, validation, and scope; supports CI quality gates; includes a Cursor agent CLI script-driven integration test that asserts database state after each prompt; and provides a clear manual checklist for release.
