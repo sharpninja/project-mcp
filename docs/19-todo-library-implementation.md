@@ -45,7 +45,7 @@ This document provides an **excruciatingly detailed** implementation plan for th
 
 ### 2.3 Package references (TodoEngine)
 
-- **GPS.SimpleMvc** — Exact package name and version to be confirmed; add the NuGet reference. Used for MVC (Model–View–Controller) structure.
+- **GPS.SimpleMVC** — NuGet package `GPS.SimpleMVC` version `2.0.0`; add the NuGet reference. Used for MVC (Model–View–Controller) structure.
 - **Microsoft.EntityFrameworkCore** — Core package.
 - **Npgsql.EntityFrameworkCore.PostgreSQL** — PostgreSQL provider.
 - **Microsoft.EntityFrameworkCore.Sqlite** — SQLite (for tests or lightweight dev).

@@ -32,5 +32,7 @@ Design and documentation for the Software Project Management MCP server.
 | [18 — REST Service Implementation](18-rest-implementation.html) | Excruciatingly detailed implementation plan for the MCP REST layer (routes, middleware, headers, errors) |
 | [19 — TODO Library Implementation](19-todo-library-implementation.html) | Excruciatingly detailed implementation plan for the TODO engine library (DI, GPS.SimpleMvc, IView, entities, repositories, slugs) |
 | [20 — Aspire Orchestration Implementation](20-aspire-implementation.html) | Excruciatingly detailed implementation plan for .NET Aspire App Host (Postgres, MCP server, config injection, Docker) |
+| [21 — TODO Engine Testing Plan](21-todo-engine-testing-plan.html) | Testing plan for the TODO engine library (unit, integration, migrations) |
+| [22 — Blazor Web App Implementation](22-blazor-webapp-implementation.html) | Excruciatingly detailed implementation plan for the Blazor web app (auth, data access, UI, Docker) |
 
 **Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.

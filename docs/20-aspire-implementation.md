@@ -38,14 +38,14 @@ This document provides an **excruciatingly detailed** implementation plan for **
 | **ProjectMcp.TodoEngine** | Class library | TODO domain and data access (see [19 — TODO Library](19-todo-library-implementation.html)). |
 | **ProjectMcp.WebApp** (optional, Phase 10) | Blazor Web App | Web UI; same solution, added in Phase 10. |
 
-**Step 2.1.1:** Create the App Host project with `dotnet new aspire-apphost -n ProjectMcp.AppHost` (or equivalent template). If the template is not available, create a .NET project that references `Aspire.Hosting.AppHost` (or the correct package name for the current Aspire version) and uses the hosting APIs.
+**Step 2.1.1:** Create the App Host project with `dotnet new aspire-apphost -n ProjectMcp.AppHost` (or equivalent template). If the template is not available, create a .NET project that references `Aspire.Hosting.AppHost` (13.1.0) and uses the hosting APIs.
 
 ### 2.2 App Host project file
 
 - **Target framework:** net10.0 (or the same as the MCP server).
 - **Package references:** 
-  - `Aspire.Hosting.AppHost` (or `Aspire.Hosting`) — core hosting.
-  - `Aspire.Hosting.PostgreSQL` (or the package that provides `AddPostgresContainer`) — for Postgres container.
+  - `Aspire.Hosting.AppHost` (13.1.0) — core hosting.
+  - `Aspire.Hosting.PostgreSQL` (13.1.0) — Postgres resource (`AddPostgres`, `AddDatabase`).
 - **Project references:** 
   - `ProjectMcp.Server` — so the App Host can add the server as a project resource.
   - Optionally `ProjectMcp.WebApp` when it exists.
@@ -65,11 +65,11 @@ This document provides an **excruciatingly detailed** implementation plan for **
 ### 3.2 PostgreSQL resource
 
 - **Step 3.2.1:** Add a PostgreSQL container:
-  - `var postgres = builder.AddPostgresContainer("postgres");`
-  - Or, if the API is `builder.AddContainer("postgres", "postgres", "16")` with a connection string, use the exact API provided by the Aspire.Hosting.PostgreSQL package. Consult the current Aspire documentation for the correct method name and parameters (e.g. `AddPostgresContainer("postgres")` may return a resource that exposes a connection string).
-- **Step 3.2.2:** If the container needs a database name (e.g. `projectmcp`), add it:
-  - e.g. `postgres.AddDatabase("projectmcp")` or pass database name in the connection string. The exact API may be `postgres.AddDatabase("db")` which returns a reference that can be passed to the server.
-- **Step 3.2.3:** Ensure the Postgres container is configured with a fixed port for local development only if needed (e.g. for external tools). By default, Aspire may assign a random port and expose the connection string only via reference.
+  - `var postgres = builder.AddPostgres("postgres");`
+  - Optional parameters: `userName`, `password`, and `port` (host port).
+- **Step 3.2.2:** Add a database (name defaults to the resource name if not provided):
+  - `var projectDb = postgres.AddDatabase("projectmcp");`
+- **Step 3.2.3:** If a fixed host port is required for local tools, pass `port` to `AddPostgres`. Otherwise let Aspire assign a random port and rely on connection string injection.
 
 ### 3.3 MCP server resource
 
@@ -77,8 +77,9 @@ This document provides an **excruciatingly detailed** implementation plan for **
   - `var mcpServer = builder.AddProject<Projects.ProjectMcp_Server>("mcpserver");`
   - Use the correct project type name (e.g. `Projects.ProjectMcp_Server` is the generated type for the Server project). This makes the server run as a child process when the App Host runs.
 - **Step 3.3.2:** Inject the Postgres connection string into the MCP server:
-  - `mcpServer.WithReference(postgres.GetConnectionString("projectmcp"))` or equivalent. The exact API may be `mcpServer.WithReference(postgres)` which automatically adds the connection string to the server’s configuration (e.g. `ConnectionStrings__DefaultConnection` or a key that the server reads). Consult Aspire docs for “reference” and “connection string” injection.
-- **Step 3.3.3:** If the server expects a specific key (e.g. `ConnectionStrings__DefaultConnection`, `DATABASE_URL`, or `PROJECT_MCP_CONNECTION_STRING`), ensure the reference is configured to write to that key. Aspire may allow something like `WithReference(postgres, (ref) => ref.ConnectionStringKey = "ConnectionStrings__DefaultConnection")` or the server may need to read the standard key Aspire sets (e.g. `ConnectionStrings__postgres`).
+  - `mcpServer.WithReference(projectDb);` (injects `ConnectionStrings__projectmcp` by default).
+- **Step 3.3.3:** If the server expects a specific key (e.g. `ConnectionStrings__DefaultConnection`), use the overload with `connectionName`:
+  - `mcpServer.WithReference(projectDb, connectionName: "DefaultConnection");`
 - **Step 3.3.4:** Set environment variables for the server if needed:
   - e.g. `mcpServer.WithEnvironment("PROJECT_MCP_HTTP_ENABLED", "true")` and `PROJECT_MCP_HTTP_PORT`, `5000` so that when run under App Host, the server listens on HTTP. Optionally pass `ASPNETCORE_URLS` if the server uses that.
 - **Step 3.3.5:** If the server exposes an HTTP endpoint, Aspire can use it for health checks and dashboard. Configure the server’s endpoint (e.g. port 5000) so that the App Host knows the server’s URL (e.g. for “Open dashboard” or service discovery). This may be automatic when using `AddProject` if the project uses `WebApplication`.
@@ -86,7 +87,7 @@ This document provides an **excruciatingly detailed** implementation plan for **
 ### 3.4 Optional: MCP server as Docker container
 
 - **Step 3.4.1:** To run the MCP server as a **container** instead of a process, add a Dockerfile to the Server project (multi-stage: build with SDK, run with runtime image). Then in the App Host:
-  - `var mcpServer = builder.AddDockerfile("path/to/Server/Dockerfile", "mcpserver")` (or similar API). The exact method may be `AddDockerfile(...)` or `AddContainer().WithDockerfile(...)`.
+  - `var mcpServer = builder.AddDockerfile("mcpserver", "path/to/Server");` (optional parameters: `dockerfilePath`, `stage`).
 - **Step 3.4.2:** Pass the Postgres connection string to the container via environment variable. The Postgres container’s host/port in the connection string must be reachable from the MCP container (e.g. use Aspire’s service name for the Postgres host). Aspire typically sets this when you use `WithReference(postgres)` on the container resource.
 - **Step 3.4.3:** Document that “run as process” is the default for local dev and “run as container” is for CI or production-like local runs.
 
@@ -177,13 +178,13 @@ This document provides an **excruciatingly detailed** implementation plan for **
 1. **Developer runs:** `dotnet run --project ProjectMcp.AppHost` (or from the App Host directory).
 2. **Aspire starts:** Postgres container is started (if not already running). MCP server process (or container) is started.
 3. **Connection string:** Aspire passes the Postgres connection string (host = container name or localhost with mapped port, database, user, password) to the MCP server via the configured reference.
-4. **Server startup:** The MCP server reads the connection string from configuration, runs EF Core migrations (if applicable) or assumes the database is already migrated, and starts listening (stdio and/or HTTP).
+4. **Server startup:** The MCP server reads the connection string from configuration, runs EF Core migrations on startup, and starts listening (stdio and/or HTTP).
 5. **Dashboard:** User can open the Aspire Dashboard to see resources and logs.
 6. **Shutdown:** Ctrl+C or stop command stops the App Host, which tears down the server process and the Postgres container (depending on Aspire lifecycle).
 
 ### 8.2 Migrations
 
-- **Step 8.2.1:** Decide when migrations run: (a) as part of server startup (e.g. `context.Database.Migrate()` in Program.cs) or (b) as a separate step (e.g. `dotnet ef database update` run manually or in CI before starting the server). Document the chosen approach. If (a), ensure the server starts only after Postgres is ready (Aspire may wait for the container to be healthy).
+- **Step 8.2.1:** Run migrations as part of server startup (e.g. `context.Database.Migrate()` in Program.cs). Ensure the server starts only after Postgres is ready (Aspire may wait for the container to be healthy).
 
 ---
 

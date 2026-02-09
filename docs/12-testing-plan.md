@@ -4,7 +4,7 @@ title: Testing Plan
 
 # Testing Plan
 
-This document defines a **detailed testing plan** for the Software Project Management MCP server. It covers unit, integration, end-to-end, and manual testing; test data; environments; and quality gates. It aligns with [04 — MCP Surface](04-mcp-surface.html), [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html), and [06 — Tech Requirements](06-tech-requirements.html).
+This document defines a **detailed testing plan** for the Software Project Management MCP server and the **TODO engine library** (ProjectMcp.TodoEngine). It covers unit, integration, end-to-end, and manual testing; test data; environments; and quality gates. It aligns with [04 — MCP Surface](04-mcp-surface.html), [10 — MCP Endpoint Diagrams](10-mcp-endpoint-diagrams.html), [06 — Tech Requirements](06-tech-requirements.html), and [19 — TODO Library Implementation](19-todo-library-implementation.html).
 
 **Note:** **Work items and tasks are the same entity**; a **task** is a **work item with level = Task**. Test cases that mention tasks apply to work_items at level = Task.
 
@@ -23,6 +23,7 @@ This document defines a **detailed testing plan** for the Software Project Manag
 **Objectives:**
 
 - All tool and resource endpoints have at least one happy-path test (integration or E2E).
+- The **TODO engine library** (View, SlugService, scope enforcement, AuditContext) has unit tests (with mocks) and integration tests (with real DB) in isolation; see §2.3, §3.5.
 - Path safety and input validation have dedicated unit tests where applicable.
 - No secrets in tests; use env or test-specific config for DB.
 - CI runs unit and integration tests on every commit; E2E optionally on schedule or tag.
@@ -37,6 +38,9 @@ This document defines a **detailed testing plan** for the Software Project Manag
 - **Path resolution (if any file-path tool exists):** Resolve path relative to root; reject `..`, absolute paths outside root, null/empty.
 - **DTO / request parsing:** Deserialize tool arguments; validate required fields and types.
 - **Slug/ID resolution:** If implemented in a dedicated service, test slug → GUID resolution and invalid slug handling.
+- **TODO library — SlugService (unit):** Allocate slug format (e.g. WI000001, E1-P001-REQ0001), next index per owner/entity type, invalid owner or entity type.
+- **TODO library — View (unit, mocked repos):** View methods with valid scope return expected DTOs; with scope for different enterprise, throw or return scope violation (ScopeViolationException or equivalent); GetProject(scope) returns null when project not in scope.
+- **TODO library — DI:** After AddTodoEngine(services, options), resolve ITodoView, ISlugService, and key repositories from ServiceProvider; ensure no missing registration.
 
 ### 2.2 Test project layout
 
@@ -70,6 +74,10 @@ tests/
     Services/
       PathResolverTests.cs
       SessionStoreTests.cs
+    TodoEngine/
+      SlugServiceTests.cs
+      TodoViewUnitTests.cs
+      TodoEngineDiTests.cs
     Validation/
       ProjectUpdateValidatorTests.cs
       RequirementCreateValidatorTests.cs
@@ -96,6 +104,13 @@ tests/
 | **task_list** | Filters applied | Correct filter object passed to store (mock). |
 | **project_update** | Invalid status value | Validation error. |
 | **project_update** | Valid techStack and docs | Parsed and passed to store. |
+| **SlugService** | AllocateSlugAsync(WorkItem, "E1-P001") | Returns slug with prefix and next index (e.g. E1-P001-WI000001). |
+| **SlugService** | AllocateSlugAsync for same owner twice | Second slug has incremented index. |
+| **SlugService** | Invalid entity type or empty owner | Throws or returns error. |
+| **TodoView (mocked)** | GetProject(scope) with project in scope | Returns project DTO. |
+| **TodoView (mocked)** | GetProject(scope) with project in other enterprise | Returns null or throws ScopeViolationException. |
+| **TodoView (mocked)** | CreateWorkItem(scope, dto) with projectId not in scope | Throws or returns scope violation. |
+| **AddTodoEngine** | Resolve ITodoView, ISlugService, IProjectRepository | All resolve successfully. |
 
 ### 2.4 Tool response shape
 
@@ -103,8 +118,8 @@ tests/
 
 ### 2.5 Coverage expectations
 
-- **Target:** ≥ 80% line coverage for handler/service and path-resolution code.
-- **Exclude:** MCP SDK glue, main entry point, and trivial DTOs.
+- **Target:** ≥ 80% line coverage for handler/service and path-resolution code, and for **TODO engine library** code (View, SlugService, scope validation).
+- **Exclude:** MCP SDK glue, main entry point, trivial DTOs, and generated/migration code.
 - **CI:** Fail the build if coverage drops below a threshold (e.g. 75%) or if new code in covered areas has no tests.
 
 ---
@@ -168,6 +183,10 @@ tests/
       ResourceSpecIntegrationTests.cs
       ResourceTasksIntegrationTests.cs
       ResourcePlanIntegrationTests.cs
+    TodoEngine/
+      TodoViewIntegrationTests.cs
+      SlugServiceIntegrationTests.cs
+      TodoEngineScopeAndAuditTests.cs
 ```
 
 ### 3.4 Key integration test cases
@@ -198,10 +217,30 @@ tests/
 | **Resources** | Request project://current/tasks | Task list matches project_id from scope. |
 | **Audit** | Change tracking records include session_id/resource_id/correlation_id | Audit rows include required fields. |
 
-### 3.5 Isolation and cleanup
+### 3.5 TODO engine library (integration, in isolation)
+
+The **TODO engine library** ([19 — TODO Library Implementation](19-todo-library-implementation.html)) is testable in isolation with a real database (Testcontainers Postgres or in-memory SQLite). These tests verify the View, SlugService, repositories, scope enforcement, and audit context propagation **without** the MCP host.
+
+| Area | Test case | Expected |
+|------|-----------|----------|
+| **View + DB** | Create project via View; GetProject(scope) | Project persisted; GetProject returns DTO for same scope. |
+| **View + DB** | CreateWorkItem(scope, dto) then ListWorkItems(scope) | Work item in list; slug allocated (e.g. E1-P001-WI000001). |
+| **View + DB** | CreateWorkItem for project in **another** enterprise (scope mismatch) | ScopeViolationException or equivalent; no row inserted. |
+| **View + DB** | GetProject(scope) with scope.EnterpriseId different from project's | Returns null or throws; no data leaked. |
+| **SlugService + DB** | AllocateSlugAsync(WorkItem, "E1-P001") with empty project | Returns E1-P001-WI000001 (or first index per [08 — Identifiers](08-identifiers.html)). |
+| **SlugService + DB** | Two work items under same project | Second slug has incremented index (e.g. WI000002). |
+| **Slug propagation** | Update entity display_id (e.g. move requirement); verify descendants | All descendant slugs updated in same transaction; or test service that performs propagation. |
+| **AuditContext** | CreateWorkItem(scope, dto, auditContext); verify IAuditWriter or audit table | Audit record includes session_id, resource_id, correlation_id from AuditContext. |
+| **AuditContext** | UpdateWorkItem with AuditContext | Update recorded with same audit fields. |
+| **Provider** | Run same View + SlugService tests with SQLite (in-memory) | Behavior consistent; slug format and scope rules unchanged. |
+
+**Test project layout:** Either a dedicated `ProjectMcp.TodoEngine.Tests` project or a folder under integration tests, e.g. `tests/ProjectMcp.Tests.Integration/TodoEngine/` with `TodoViewIntegrationTests.cs`, `SlugServiceIntegrationTests.cs`, `TodoEngineScopeAndAuditTests.cs`.
+
+### 3.6 Isolation and cleanup
 
 - Each test that mutates data should use a dedicated project/enterprise (e.g. unique GUID or slug) or run in a transaction that is rolled back so tests do not affect each other.
 - Avoid shared mutable state; prefer fresh DB or transaction rollback per test.
+- **TODO library tests:** Use a fresh DbContext (or new container) per test class or test method so slug allocation and scope tests do not interfere.
 
 ---
 
@@ -440,5 +479,6 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | Resources (spec/tasks/plan) | — | Handler + store returns correct data | Yes (resource read) | Agent may use resources | Yes |
 | Context key validation | Middleware/handler | Reject invalid key | E2E without key | — | Try invalid key |
 | Logging (correlation_id, no secrets) | — | Optional (assert log props) | — | — | Manual check |
+| **TODO library (View, SlugService, scope, audit)** | SlugService unit; View unit (mocked); AddTodoEngine DI | View + DB; SlugService + DB; scope rejection; AuditContext; slug propagation; optional SQLite | — | — | — |
 
 This plan ensures coverage of all MCP endpoints, path safety, validation, and scope; supports CI quality gates; includes a Cursor agent CLI script-driven integration test that asserts database state after each prompt; and provides a clear manual checklist for release.
