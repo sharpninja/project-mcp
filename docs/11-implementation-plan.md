@@ -269,6 +269,7 @@ Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases 
 | 7.6 | Enterprise scope on every endpoint | Ensure every MCP tool and resource validates that requested or submitted data is within the session’s enterprise (and project). Reject cross-enterprise access with an error; **log** each attempt with context_key, tool/resource, requested ids, target enterprise for **manual follow-up**. See [06 — Tech Requirements](06-tech-requirements.html). | All tool phases |
 | 7.7 | README and env docs | README: how to run, add to Cursor, env vars (DATABASE_URL, PROJECT_MCP_ROOT, PROJECT_MCP_ENTERPRISE_ID, PROJECT_MCP_PROJECT_ID), database setup, migrations. | All phases |
 | 7.8 | Schema/migration docs | Document how to run migrations; optionally add example seed data or script. | 1.3 |
+| 7.9 | Audit history API | Implement **read-only audit/history API** for SUDO/admin users: query by entity (type/id), date range, session, or resource. Return change records (session_id, resource_id, correlation_id, entity_type, entity_id, old/new values or row state, changed_at). Secure so only SUDO/admin can call. Per [06 — Tech Requirements](06-tech-requirements.html); audit logging is in scope for V1. | 1.8 |
 
 ### Deliverables
 

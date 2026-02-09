@@ -51,7 +51,8 @@ This plan was reviewed against [14 — Project Web App](14-project-web-app.html)
 - MCP transport behavior (stdio/REST) and agent tooling.
 - Mobile UI (covered in [15 — Mobile App](15-mobile-app.html)).
 - **Exports:** CSV/PDF export of reports or Gantt (later enhancement per [14 §10](14-project-web-app.html)).
-- **Audit/history UI:** "Last changed" and history per entity when schema supports it; not required for initial release.
+
+**In scope for V1:** **Audit logging** (change tracking recording and read-only audit/history API per [06 — Tech Requirements](06-tech-requirements.html)). The web app may show "last changed" and optional history per entity using that API.
 
 ---
 

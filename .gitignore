@@ -386,6 +386,8 @@ _site/
 .jekyll-metadata
 vendor/
 .bundle/
+*.html
+!docs/_layouts/*.html
 
 # OS
 .DS_Store

@@ -185,7 +185,7 @@ Users can navigate the data in a **tree** whose root is the **enterprise**. The 
 
 - **Dashboard (home):** After login or enterprise selection, show a summary: recent activity, my tasks, open issues, milestone deadlines (configurable widgets).
 - **Exports:** Export progress report or Gantt data (CSV, PDF) as a later enhancement.
-- **Audit / history:** If the schema adds history tables later, show “last changed” and optional history per entity.
+- **Audit / history:** Audit logging (recording and read-only audit/history API) is **in scope for V1**. The web app may show “last changed” and optional history per entity using the audit/history API (SUDO/admin for full history; scoped users for "last changed" on entities they can see).
 
 ---
 
