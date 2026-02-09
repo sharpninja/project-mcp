@@ -480,5 +480,8 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | Context key validation | Middleware/handler | Reject invalid key | E2E without key | — | Try invalid key |
 | Logging (correlation_id, no secrets) | — | Optional (assert log props) | — | — | Manual check |
 | **TODO library (View, SlugService, scope, audit)** | SlugService unit; View unit (mocked); AddTodoEngine DI | View + DB; SlugService + DB; scope rejection; AuditContext; slug propagation; optional SQLite | — | — | — |
+| **Blazor Web App** | UserScope, scope enforcement, SUDO, TreeService (mock), DTO validation | Auth callback; all scoped services + DB; TreeService; Search/Reports/Gantt; SUDO create enterprise | Login, ScopeGuard, tree, CRUD, search, reports, Gantt, issues, SUDO | — | Detailed plan in [24](24-blazor-webapp-testing-plan.html) |
+
+**Blazor Web App:** Excruciatingly detailed testing for the web app (auth, scope, tree, search, reports, Gantt, issues, SUDO) is in [24 — Blazor Web App Testing Plan](24-blazor-webapp-testing-plan.html).
 
 This plan ensures coverage of all MCP endpoints, path safety, validation, and scope; supports CI quality gates; includes a Cursor agent CLI script-driven integration test that asserts database state after each prompt; and provides a clear manual checklist for release.
