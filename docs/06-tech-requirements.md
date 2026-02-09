@@ -8,33 +8,35 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 
 ## Runtime
 
-- **.NET** — Target .NET 8 or later (LTS). Required for MCP SDK and supported tooling.
-- **Execution** — Server runs as a single process. Launched by the host (e.g. Cursor) via command line (e.g. `dotnet run` or path to published executable); stdio transport for MCP.
+- **.NET** — Target .NET 10 (LTS). Required for MCP SDK and supported tooling.
+- **Execution** — Server runs as a single process. Supports **stdio** (for IDE integration) and **REST over HTTP** (for scriptable and remote clients). Launched by the host (e.g. Cursor) via command line for stdio; when run as an HTTP host, the server listens on a configurable port.
 
 ## Protocol and SDK
 
 - **MCP** — Model Context Protocol. Server implements the standard MCP server surface.
-- **Transport** — stdio (required for typical IDE integration). HTTP/SSE or other transports are out of scope for v1.
-- **SDK** — Official MCP .NET SDK (e.g. `ModelContextProtocol` or equivalent server package). No custom protocol handling.
+- **Transports** — **stdio** (required for typical IDE integration; Cursor and similar clients launch the process and attach to stdin/stdout). **REST over HTTP** (required): the server exposes REST endpoints so that MCP tools and resources can be invoked via HTTP. Same tool and resource semantics; clients send **context_key** (and optionally **correlation_id**) in request headers; request/response bodies are JSON. This allows scripts, CI, and remote clients to use the same capabilities without stdio.
+- **SDK** — Official MCP .NET SDK (e.g. `ModelContextProtocol` or equivalent server package) for stdio; ASP.NET Core (or equivalent) for the HTTP host and REST endpoints.
 
 ## Language and build
 
 - **Language** — C#. Nullable reference types and modern C# encouraged.
-- **Project type** — Console application or worker suitable for stdio. Standard SDK-style project (e.g. `dotnet new console`).
+- **Root namespace** — Use `ProjectMCP` as the root namespace for all projects.
+- **Project type** — Host that supports both stdio (e.g. console/worker for MCP stdio) and HTTP (e.g. ASP.NET Core minimal API or WebApplication) for REST. Standard SDK-style project(s); may be one process with both transports or documented run modes.
+- **TODO engine library** — Encapsulate TODO/work-item logic in a reusable class library with DI extension methods (e.g. `AddTodoEngine`). The library resolves its dependencies from `IServiceProvider`, assumes services and data contexts are registered by the host, follows the Go4 MVC pattern using `GPS.SimpleMvc`, routes all TODO API interaction through a View interface extending `IView`, and uses EF Core with configurable providers for PostgreSQL, SQLite, and SQL Server.
 - **Output** — Build with `dotnet build`; run with `dotnet run` or publish (e.g. `dotnet publish -c Release`) for a self-contained or framework-dependent executable.
-- **Dependencies** — MCP .NET SDK, .NET BCL, and a PostgreSQL driver or ORM (e.g. Npgsql, EF Core with Npgsql). No optional backends until the integration phase.
+- **Dependencies** — MCP .NET SDK, .NET BCL, `GPS.SimpleMvc`, and EF Core with provider packages for PostgreSQL, SQLite, and SQL Server.
 
 ## Storage
 
-- **Backend** — PostgreSQL. Required for v1.
+- **Backend** — EF Core with configurable providers for PostgreSQL, SQLite, and SQL Server. PostgreSQL is the default for v1 deployments.
 - **Connection** — Configured via environment (e.g. `DATABASE_URL`, `PROJECT_MCP_CONNECTION_STRING`, or `ConnectionStrings__DefaultConnection`). No hardcoded connection strings.
-- **Schema** — Tables for project (metadata, tech stack), work_items (**level = Work | Task; tasks are level = Task**), milestones, releases. UTF-8 encoding. Use standard PostgreSQL types; JSONB acceptable for tech stack, labels where specified.
+- **Schema** — Tables for project (metadata, tech stack), work_items (**level = Work | Task; tasks are level = Task**), milestones, releases. UTF-8 encoding. Use provider-appropriate types; JSONB is acceptable for PostgreSQL where specified.
 - **Change tracking** — **Change tracking must be enabled on all fields of all entities** in the database. Every insert, update, and delete to entity data must be recorded (e.g. via audit tables, triggers, or application-level logging) so that what changed, when, and optionally by whom can be determined. Each change record must include the **session identifier**, **resource identifier**, and **correlation id** of the request (when available). No entity or field may be excluded. See [03 — Data Model](03-data-model.html) (Change tracking).
 - **Scope** — Single logical project per server process (or per connection) in v1; optional project_id on tables for future multi-project support.
 
 ## Environment and configuration
 
-- **Database connection** — Required env or config for PostgreSQL (e.g. `DATABASE_URL`). No secrets in repo; use env or secret store in deployment.
+- **Database connection** — Required env or config for the selected provider (e.g. `DATABASE_URL`). No secrets in repo; use env or secret store in deployment.
 - **No secrets in repo** — No API keys or tokens in design or default config. Future integrations (e.g. GitHub) will use env-provided tokens.
 - **No config file required** — Server must run with no config file; env and MCP tool arguments are sufficient for v1.
 
@@ -73,8 +75,8 @@ Technical requirements for the Software Project Management MCP server. **Methodo
 
 ## Non-requirements (v1)
 
-- No other databases (e.g. SQLite) as primary store; PostgreSQL only.
-- No HTTP server or SSE in process.
+- No databases beyond PostgreSQL, SQLite, and SQL Server via EF Core.
+- No MCP-over-SSE or streaming HTTP transport for MCP protocol (REST is request/response only).
 - No end-user authentication for MCP tools beyond **agent identity** (agent name must resolve to a Resource).
 - No multi-project or multi-workspace support in a single process.
 - No telemetry or external network calls except for future integration backends.

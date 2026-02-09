@@ -10,6 +10,17 @@ title: MCP Surface
 
 - **Issued at handshake** — When the server responds to the agent’s Initialize request (or immediately after scope is established), it includes a **context_key** in the response. The context key is an opaque value (e.g. a UUID or signed token) that uniquely identifies the session and binds it to the scope and connection state.
 - **Included on every request** — The agent **must** send the context key with **every** tool call and resource read/subscribe after the handshake. How it is sent depends on the transport: e.g. a request header (e.g. `X-Context-Key` or `MCP-Context-Key`), a parameter in the envelope, or a field in each tool/resource request. The server **instructs the agent** (via protocol or documentation) to include the context key in all requests.
+
+## REST endpoints
+
+The MCP server **exposes REST endpoints** over HTTP so that tools and resources can be invoked without stdio (e.g. from scripts, CI, or remote clients). The same tool and resource semantics apply; only the transport differs.
+
+- **Base URL** — Configurable (e.g. `http://localhost:5000` or env `ASPNETCORE_URLS`). All MCP REST routes are under a common prefix (e.g. `/mcp` or `/api/mcp`) to avoid clashes.
+- **Context key** — REST clients send **context_key** on every request via header (e.g. `X-Context-Key` or `MCP-Context-Key`). Clients obtain a context_key by calling an **initialize** endpoint (e.g. `POST /mcp/initialize` with client name and capabilities); the response includes context_key, server capabilities, tool list, and resource URIs.
+- **Correlation ID** — Optional header (e.g. `X-Correlation-Id` or `MCP-Correlation-Id`) on any request; same semantics as stdio.
+- **Tools** — Invoked via HTTP (e.g. `POST /mcp/tools/{toolName}` or `POST /mcp/tools/call` with body `{ "name": "toolName", "arguments": { ... } }`). Request body and response are JSON. Scope is taken from the session bound to the context_key.
+- **Resources** — Read via HTTP (e.g. `GET /mcp/resources/project/current/spec` or resource path as URL path). Context key in header; response is JSON (or content type per resource).
+- **Session** — For REST, the server keys the session by context_key (one session per context_key). Scope is set by calling the **scope_set** tool over REST; thereafter all REST requests with that context_key use that scope until scope_set is called again.
 - **Validation** — The server validates the context key on each request. If the key is missing, invalid, or expired, the server returns an error and does not execute the tool or return the resource. Valid keys resolve to the session (and thus the session’s scope); the server uses that session for the operation.
 - **Session binding** — The context key ties requests to the session that completed the handshake, so the server can apply the correct scope and reject requests that do not belong to an established session.
 

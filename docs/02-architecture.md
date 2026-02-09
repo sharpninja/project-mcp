@@ -28,6 +28,8 @@ flowchart LR
 
 - **Tools** — Actions: create/update task, milestone, release; update project.
 - **Resources** — Read-only project state (e.g. `project://current/spec`, `project://current/tasks`, `project://current/plan`). The client can subscribe or poll these.
+- **TODO engine library** — Reusable domain module for work items/tasks, shared by the MCP server and other hosts. Configured via DI extension methods that resolve services and data contexts from `IServiceProvider`.
+- **Transports** — The MCP server is reachable via **stdio** (for IDE clients such as Cursor) and **REST over HTTP** (for scripts, CI, and remote clients). Same tools and resources are exposed on both; REST clients send **context_key** and optional **correlation_id** in headers. See [06 — Tech Requirements](06-tech-requirements.html) (Protocol and SDK).
 - **Storage** — PostgreSQL as the primary store. Later, adapters (e.g. GitHub Projects/Issues) can be added behind a store interface for sync or alternative backends.
 
 **Note:** **Tasks are work items with level = Task**; task_* tooling is the task-level view of work_items.
@@ -68,7 +70,7 @@ flowchart TB
 
 **Steps:**
 
-1. **Connect** — The agent opens the transport to the MCP server (e.g. stdio pipe or HTTP/SSE). The server accepts the connection.
+1. **Connect** — The agent opens the transport to the MCP server (e.g. **stdio** pipe for IDE, or **HTTP** for REST). The server accepts the connection. For REST, the agent sends an Initialize-equivalent (or the server treats the first request with context_key as authenticated after handshake is documented).
 2. **Initialize request** — The agent sends the protocol **Initialize** request (client name, protocol version, client capabilities). The server receives it and loads its config (e.g. project root, default enterprise/project from env).
 3. **Agent identity** — The server resolves the **client name** to a **Resource** in the enterprise. If the agent is not approved, return **Unauthorized. Agent not approved for Enterprise** and stop.
 4. **Initialize response and context key** — The server responds with **Initialize** response: server capabilities, list of tools (names, parameters), and resource URI templates (e.g. `project://current/spec`, `project://current/tasks`, `project://current/plan`). The server **issues a context_key** (opaque token identifying this session) and includes it in the response. The agent **caches the context_key** along with the tools and resources. The server **instructs the agent** to include the context key in all subsequent requests.

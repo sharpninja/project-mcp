@@ -22,7 +22,7 @@ This document defines a **mobile application** in **phone form factor** built wi
 | Layer | Choice | Notes |
 |-------|--------|--------|
 | **UI framework** | Avalonia UI | Cross-platform .NET UI; targets phone form factor (e.g. single-window, responsive layout for narrow screens). |
-| **Runtime** | .NET (e.g. .NET 8 or .NET 10) | Same BCL as server; Avalonia supports mobile runtimes (e.g. Android, iOS via MAUI host or Avalonia mobile). |
+| **Runtime** | .NET 10 | Same BCL as server; Avalonia supports mobile runtimes (e.g. Android, iOS via MAUI host or Avalonia mobile). |
 | **Authentication** | GitHub OAuth2 (same as web app) | Use the same GitHub OAuth App (or a dedicated mobile client with PKCE). Claims (GitHub user + app-defined scope) drive which projects/enterprises (and thus which assignments) the user can see. |
 | **Backend** | REST (or similar) API | Mobile app does not connect to PostgreSQL directly. It calls an **API** (e.g. the same ASP.NET Core API used by the web app, or a dedicated mobile API) that returns the user’s task queue and accepts updates. API validates the OAuth2 access token and applies claims-based filtering. |
 | **Data** | Same data model | Work items, tasks, work queue (`work_queue_items`), assignments (`resource_id` on work, work_items, tasks); see [03 — Data Model](03-data-model.html) and [00 — Definitions](00-definitions.html) (Work item, Task, Work queue). |

@@ -29,5 +29,8 @@ Design and documentation for the Software Project Management MCP server.
 | [15 — Mobile App](15-mobile-app.html) | Avalonia UI phone app: OAuth2, task queue for assigned work items |
 | [16 — Gap Analysis (TODO)](16-gap-analysis-todo.html) | Remediation tracker (currently no open gaps) |
 | [17 — Guardrails](17-guardrails.html) | Constraints and conventions for agents and edits; single reference for guardrails |
+| [18 — REST Service Implementation](18-rest-implementation.html) | Excruciatingly detailed implementation plan for the MCP REST layer (routes, middleware, headers, errors) |
+| [19 — TODO Library Implementation](19-todo-library-implementation.html) | Excruciatingly detailed implementation plan for the TODO engine library (DI, GPS.SimpleMvc, IView, entities, repositories, slugs) |
+| [20 — Aspire Orchestration Implementation](20-aspire-implementation.html) | Excruciatingly detailed implementation plan for .NET Aspire App Host (Postgres, MCP server, config injection, Docker) |
 
 **Note:** **Work items and tasks are the same entity**; a **task** is a **work item** with **level = Task**.

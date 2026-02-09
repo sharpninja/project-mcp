@@ -18,7 +18,7 @@ This document provides a **detailed deployment plan** for the Software Project M
 | **Staging / pre-prod** | Integration and E2E before release | Containers (Docker Compose or Aspire) | Dedicated Postgres instance |
 | **Production** | Live MCP server for end users | Containers; optional orchestration | Production Postgres |
 
-The MCP server is **stdio-based** for v1. When run in a container, the host (e.g. IDE or a sidecar) must attach to the container’s stdin/stdout or the server must expose a transport (e.g. HTTP) that the host can call. This plan assumes **local/Aspire** runs the server as a process with stdio; **container** deployment may use the same process or a thin wrapper that forwards stdio from a network endpoint (implementation choice).
+The MCP server supports **stdio** (for IDE clients) and **REST over HTTP** (for scripts, CI, and remote clients). When run in a container, the server exposes an HTTP port for REST; the host can also attach to stdin/stdout for stdio. This plan assumes **local/Aspire** runs the server with both transports; **container** deployment exposes the HTTP port and optionally stdio (e.g. for a sidecar that attaches to the process).
 
 ---
 
@@ -26,7 +26,7 @@ The MCP server is **stdio-based** for v1. When run in a container, the host (e.g
 
 | Prerequisite | Local | CI | Staging / Prod |
 |--------------|--------|-----|-----------------|
-| .NET 8 SDK | Required | Required (setup step) | Not needed (runtime image) |
+| .NET 10 SDK | Required | Required (setup step) | Not needed (runtime image) |
 | Docker | Optional (for Postgres or full stack) | Required (containers, Testcontainers) | Required |
 | Docker Compose | Optional | Optional | Optional |
 | .NET Aspire workload | Optional (for App Host) | Optional | Optional |
@@ -111,7 +111,7 @@ dotnet run --project src/ProjectMcp.AppHost
 - **Multi-stage:**
   - Stage 1: Build with SDK image (`mcr.microsoft.com/dotnet/sdk:8.0`). Restore, publish: `dotnet publish -c Release -o /app`.
   - Stage 2: Runtime image (`mcr.microsoft.com/dotnet/aspnet:8.0` or `runtime:8.0`). Copy `/app` from build. Entrypoint: run the published executable (e.g. `dotnet ProjectMcp.Server.dll` or the executable name).
-- **No HTTP server** required for stdio; if the container is used with a host that attaches to stdio, ensure the process is the main process (PID 1 or launched by entrypoint) and uses stdin/stdout.
+- **HTTP port** — The server exposes REST endpoints on a configurable port (e.g. 5000 or from env). Map the port in the container (e.g. `-p 5000:5000`) so clients can call REST. For stdio, ensure the process is the main process (PID 1 or launched by entrypoint) if the host attaches to stdin/stdout.
 
 Example (conceptual):
 
@@ -160,6 +160,7 @@ docker run --rm -e ConnectionStrings__DefaultConnection="Host=host.docker.intern
 | **Build** | Checkout; .NET restore; build; (optional) dotnet format / lint | Push, PR |
 | **Test** | Run unit tests; run integration tests (Testcontainers or Postgres service); optionally E2E | Push, PR |
 | **Publish** | `dotnet publish -c Release`; publish artifact (e.g. server zip or Docker image) | Push to main, or tag |
+| **NuGet (Todo library)** | Pack and push **ProjectMCP.Todo** to the NuGet repository for **sharpninja** (e.g. GitHub Packages or org feed) | Push to main, or tag (see §6.4) |
 | **Docker** | Build Docker image; push to registry (e.g. GHCR) | Tag (e.g. v1.0.0) or main |
 | **Deploy (staging)** | Deploy to staging (e.g. pull image, run with staging env) | Manual or auto on main |
 | **Deploy (production)** | Deploy to production (manual approval, then deploy) | Manual on tag or release |
@@ -188,6 +189,15 @@ docker run --rm -e ConnectionStrings__DefaultConnection="Host=host.docker.intern
 - **Secrets:** Store in GitHub Secrets (or equivalent): no connection strings for production in repo. Use secrets for registry login and, if needed, staging DB URL.
 - **Test DB:** Use Testcontainers (no secret) or a CI Postgres service with a non-sensitive test URL (e.g. `postgres://postgres:postgres@localhost:5432/test` in CI env).
 
+### 6.4 NuGet publish: ProjectMCP.Todo library (sharpninja)
+
+The **ProjectMCP.Todo** library (the reusable TODO engine; see [19 — TODO Library Implementation](19-todo-library-implementation.html)) is published to the **NuGet repository for sharpninja** from the **GitHub pipeline**.
+
+- **What is published:** The ProjectMCP.Todo (or ProjectMcp.TodoEngine) class library is packed as a NuGet package and pushed to the sharpninja NuGet feed (e.g. GitHub Packages for the sharpninja org, or another NuGet source configured for sharpninja).
+- **When:** The publish step runs in CI (e.g. on push to `main` or on version tags). The pipeline builds the library, runs `dotnet pack`, and pushes the resulting `.nupkg` to the configured NuGet source.
+- **Configuration:** The pipeline uses a secret or token (e.g. `NUGET_TOKEN` or GitHub Packages auth) with permission to push to the sharpninja NuGet repository. No secrets are stored in the repo.
+- **Consumers:** The MCP server and other projects (e.g. web app) may consume the library either from the same solution (project reference) during development or from the sharpninja NuGet feed when using the published package (e.g. in other repos or after release).
+
 ---
 
 ## 7. Staging and production deployment
@@ -214,8 +224,8 @@ docker run --rm -e ConnectionStrings__DefaultConnection="Host=host.docker.intern
 
 ### 7.3 Health and readiness
 
-- **Liveness:** Process runs and responds to stdio (no separate HTTP health for v1). Orchestrator can use “process running” as liveness.
-- **Readiness:** If possible, expose a minimal “ready” check (e.g. DB ping). For stdio-only, readiness may be “process started and DB connection succeeded once at startup.”
+- **Liveness:** Process runs; for REST, a simple HTTP GET to a health or root endpoint can confirm the server is up. Orchestrator can use "process running" or HTTP 200 as liveness.
+- **Readiness:** Expose a minimal "ready" check (e.g. DB ping, or GET /mcp/health). Readiness = process started, DB connection succeeded, and (if REST) HTTP server listening.
 - **Startup:** Server should fail fast if DB is unreachable or connection string is missing; log clearly.
 
 ---
@@ -228,6 +238,7 @@ docker run --rm -e ConnectionStrings__DefaultConnection="Host=host.docker.intern
 | `PROJECT_MCP_ROOT` | No | Optional project root; default = cwd | `/repo` |
 | `PROJECT_MCP_ENTERPRISE_ID` | No | Default enterprise for scope | GUID or slug |
 | `PROJECT_MCP_PROJECT_ID` | No | Default project for scope | GUID or slug |
+| `ASPNETCORE_URLS` or `PROJECT_MCP_HTTP_PORT` | No | HTTP listen URL/port for REST endpoints | `http://localhost:5000` |
 | Serilog / logging sink | No | Configurable logging (e.g. `SERILOG__WRITE_TO`, sink URL) | Seq, Application Insights, etc. |
 
 ---

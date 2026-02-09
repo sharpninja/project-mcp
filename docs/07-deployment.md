@@ -23,7 +23,7 @@ Deployment is via **Docker containers** with **.NET Aspire** orchestration.
 
 ## Docker
 
-- **Dockerfile** — For the MCP server: multi-stage build (build on SDK image, run on runtime image). Publish the app and run the published executable. No HTTP server required if the host attaches to stdio; if the server is invoked as `docker run ... <mcp-server>`, the host (e.g. IDE) may run the container and attach stdin/stdout, or the server may expose a transport (e.g. HTTP) for container-friendly access; design choice to align with how the MCP client connects.
+- **Dockerfile** — For the MCP server: multi-stage build (build on SDK image, run on runtime image). Publish the app and run the published executable. The server exposes **REST over HTTP** (required) and optionally **stdio** for IDE attachment. When run in a container, the HTTP port is exposed for REST; the host may also attach to stdin/stdout for stdio.
 - **Base image** — Use official .NET runtime image (e.g. `mcr.microsoft.com/dotnet/aspnet:8.0` or `runtime:8.0` for console).
 - **PostgreSQL** — Use official Postgres image when running as a container; Aspire can pull and run it.
 
@@ -37,7 +37,7 @@ Deployment is via **Docker containers** with **.NET Aspire** orchestration.
 ## Requirements
 
 - **Docker** — Required for running the Postgres container and (if used) the MCP server container. Dockerfile(s) in the repo.
-- **Aspire** — Use Aspire.Hosting (and optional Aspire.Hosting.PostgreSQL or AddPostgresContainer) in the App Host. Target the same .NET version as the server (e.g. .NET 8).
+- **Aspire** — Use Aspire.Hosting (and optional Aspire.Hosting.PostgreSQL or AddPostgresContainer) in the App Host. Target the same .NET version as the server (e.g. .NET 10).
 - **Single solution** — App Host, MCP server project, and any shared projects in one solution; App Host references the server project and declares the container/resource topology.
 
 ## Out of scope for this doc

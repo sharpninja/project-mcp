@@ -16,7 +16,7 @@ This document defines a **detailed testing plan** for the Software Project Manag
 |-------|---------|--------|-------------------|
 | **Unit** | Logic in isolation; fast feedback | Handlers, validators, path resolution, DTOs | xUnit, NSubstitute/FakeItEasy |
 | **Integration** | Server + database; real I/O | Repositories, DbContext, migrations | xUnit, Testcontainers (PostgreSQL) or dedicated test DB |
-| **E2E** | Full MCP flow over stdio | Initialize, context_key, tools, resources | Script or small test client driving stdio; real or test DB |
+| **E2E** | Full MCP flow (stdio or REST) | Initialize, context_key, tools, resources | Script or test client over stdio or HTTP REST; real or test DB |
 | **Cursor agent CLI script** | Agent-driven workflow + DB assertions | Locally running ProjectMCP; scripted prompts; DB state per step | Cursor agent CLI; prompt script; DB snapshot comparison |
 | **Manual** | UX and host integration | Cursor (or other MCP client) | Checklist; exploratory |
 
@@ -209,8 +209,8 @@ tests/
 
 ### 4.1 Scope and responsibilities
 
-- **Full MCP protocol over stdio:** Start server process; send Initialize request; receive response with context_key and tool list. Send tool calls (with context_key); assert response content. Optionally request resources.
-- **Real server process:** Either in-process server with stdio pipes or subprocess (e.g. `dotnet run`); database can be Testcontainers or dedicated E2E DB.
+- **Full MCP protocol (stdio or REST):** Start server process; send Initialize request (stdio or `POST /mcp/initialize`); receive response with context_key and tool list. Send tool calls (with context_key via envelope or `X-Context-Key` header); assert response content. Optionally request resources. Both transports should be covered (e.g. E2E for stdio, E2E for REST).
+- **Real server process:** Either in-process server with stdio pipes or subprocess (e.g. `dotnet run`); for REST, run HTTP host and send HTTP requests. Database can be Testcontainers or dedicated E2E DB.
 
 ### 4.2 E2E test flow (example)
 
@@ -300,7 +300,7 @@ Example structure (prompts and expectations are illustrative):
 | Step | Prompt (to Cursor agent CLI) | Expected DB state after step |
 |------|------------------------------|------------------------------|
 | 1 | “Set scope to enterprise … and project … (or create a project named ProjectMcp for this repo).” | Exactly one project; project name matches (e.g. "ProjectMcp"); scope can be used for subsequent steps. |
-| 2 | “Update the project with description and tech stack: .NET 8, C#, PostgreSQL, MCP.” | project row: description and tech_stack (or equivalent) populated as specified. |
+| 2 | “Update the project with description and tech stack: .NET 10, C#, PostgreSQL, MCP.” | project row: description and tech_stack (or equivalent) populated as specified. |
 | 3 | “Add a task: ‘Scaffold MCP server and one tool’ with status todo.” | Exactly one task; title and status match. |
 | 4 | “Add a task: ‘Implement data layer and migrations’.” | Exactly two tasks; second task title matches. |
 | 5 | “List all tasks and then mark the first task as in-progress.” | Two tasks; first task status = in-progress. |
@@ -362,7 +362,8 @@ Use this with Cursor (or another MCP client) after deployment or before release.
 | 11 | milestone_create / list | Create milestone; list | Milestone in list. |
 | 12 | release_create / list | Create release; list | Release in list. |
 | 13 | Invalid context | (If client allows) Send request without or with wrong context_key | Error response; no data. |
-| 14 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
+| 14 | REST: initialize and tools | Over HTTP: POST /mcp/initialize; then POST /mcp/tools/call (or equivalent) with X-Context-Key header; GET /mcp/resources/... with header | Same results as stdio; 401/400 without valid context_key. |
+| 15 | Logging | Run a few tools; check logs (console or configured sink) | Logs contain tool name, scope/correlation_id if sent; no secrets. |
 
 ### 6.2 Exploratory testing
 

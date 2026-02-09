@@ -15,11 +15,12 @@ This document provides a **detailed implementation plan** for the Software Proje
 | 0 | Setup and scaffold | Solution, MCP server shell, one tool | 1–2 days |
 | 1 | Data layer | PostgreSQL schema, migrations, data access | 3–5 days |
 | 2 | Session and scope | Context key, scope_set/scope_get, session store | 2–3 days |
+| 2b | REST endpoints | HTTP server; REST routes for initialize, tools, resources; same handlers as stdio | 1–2 days |
 | 3 | Resources | project://current/spec, /tasks, /plan | 2 days |
 | 4 | Project tools | project_get_info, project_update | 1–2 days |
 | 5 | Task tools | task_create, task_update, task_list, task_delete | 2–3 days |
 | 6 | Planning tools | milestone_*, release_* | 2–3 days |
-| 7 | Logging and hardening | Serilog, path safety, validation, docs | 2–3 days |
+| 7 | Logging and hardening | Serilog, path safety, validation, config docs | 2–3 days |
 | 8 | GitHub OAuth2 integration | OAuth App, ASP.NET Core auth, claims, resource/scope resolution | 2–3 days |
 | 9 | Extended domain entities | Requirements, standards, domains, systems, assets, resources, keywords, issues, associations | 5–8 days |
 | 10 | Web app + API surface | Blazor web app, API contract, FTS schema | 5–8 days |
@@ -39,7 +40,8 @@ Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases 
 
 | ID | Task | Details | Dependencies |
 |----|------|---------|--------------|
-| 0.1 | Create solution and projects | Solution with: (1) MCP server console app (.NET 8), (2) App Host (Aspire) project, (3) optional test project. Use `dotnet new`; SDK-style csproj. | — |
+| 0.1 | Create solution and projects | Solution with: (1) MCP server console app (.NET 10), (2) App Host (Aspire) project, (3) optional test project. Use `dotnet new`; SDK-style csproj. Root namespace: `ProjectMCP`. | — |
+| 0.1a | Add TODO engine library | Create a reusable class library (e.g. `ProjectMcp.TodoEngine`) and define DI extension methods for setup (e.g. `AddTodoEngine`) that resolve services and data contexts from `IServiceProvider`. Implement the Go4 MVC structure using `GPS.SimpleMvc`, and expose TODO API interaction via a View interface that extends `IView`. | 0.1 |
 | 0.2 | Add MCP .NET SDK | Add NuGet package for official MCP .NET server (e.g. `ModelContextProtocol` or current SDK name). Target stdio transport. | 0.1 |
 | 0.3 | Register one tool | Implement a single tool (e.g. `project_get_info`) that returns a stub or empty result. Register with the MCP server. | 0.2 |
 | 0.4 | Wire stdio and Initialize | Ensure server reads/writes stdio per MCP spec. Handle Initialize request and return capabilities, tool list. No context_key yet. | 0.2 |
@@ -49,6 +51,7 @@ Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases 
 
 - Solution builds with `dotnet build`.
 - `dotnet run --project <ServerProject>` starts the server; Cursor can list and call the stub tool.
+- TODO engine library project exists with DI setup extension methods, a Go4 MVC structure using `GPS.SimpleMvc`, and a View interface extending `IView` for TODO API interaction.
 - README section: "Running the server locally" and "Adding to Cursor."
 
 ### Acceptance criteria
@@ -61,15 +64,15 @@ Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases 
 
 ## Phase 1: Data layer
 
-**Goal:** PostgreSQL schema, migrations, and data access for project, **work items (tasks are level = Task)**, milestones, releases (v1 scope). No MCP tools yet beyond stub.
+**Goal:** EF Core schema/migrations and data access for project, **work items (tasks are level = Task)**, milestones, releases (v1 scope), targeting PostgreSQL with configurable SQLite and SQL Server providers. No MCP tools yet beyond stub.
 
 ### Tasks
 
 | ID | Task | Details | Dependencies |
 |----|------|---------|--------------|
-| 1.1 | Define entity models | C# types for Enterprise, Project, **WorkItem (level = Work | Task)**, Milestone, Release (per [03 — Data Model](03-data-model.html)). Include id (GUID), display_id/slug, FKs. Use nullable reference types. | — |
-| 1.2 | Choose data access | Select EF Core + Npgsql or Dapper + Npgsql. Add packages and DbContext or repository interfaces. | 1.1 |
-| 1.3 | Create initial migration | Tables: enterprise, project, **work_items**, milestone, release. Match "PostgreSQL persistence" in [03 — Data Model](03-data-model.html). Use UTF-8; JSONB for tech_stack, labels where specified. | 1.2 |
+| 1.1 | Define entity models | C# types for Enterprise, Project, **WorkItem** (level = Work or Task), Milestone, Release, **Resource (minimal)** (per [03 — Data Model](03-data-model.html)). Include id (GUID), display_id/slug, FKs. Use nullable reference types. | — |
+| 1.2 | Choose data access | Use EF Core with provider packages for PostgreSQL, SQLite, and SQL Server. Add packages and DbContext or repository interfaces. | 1.1 |
+| 1.3 | Create initial migration | Tables: enterprise, project, **resources** (minimal: id, display_id, enterprise_id, name — for work_items.resource_id FK and Phase 2 agent resolution; full resources in Phase 9), **work_items**, milestone, release. Match "PostgreSQL persistence" in [03 — Data Model](03-data-model.html). Use UTF-8; JSONB for tech_stack, labels where specified. Ensure EF Core model works across PostgreSQL, SQLite, and SQL Server providers. | 1.2 |
 | 1.4 | Connection from env | Read connection string from env (e.g. `DATABASE_URL`, `PROJECT_MCP_CONNECTION_STRING`, or `ConnectionStrings__DefaultConnection`). Validate on startup; fail fast with clear message if missing. | 1.2 |
 | 1.5 | Implement project CRUD | Methods: GetProject(projectId), CreateOrUpdateProject(enterpriseId, projectId?, dto). Scope to single enterprise/project for v1 if needed. | 1.3, 1.4 |
 | 1.6 | Implement work item repository | Create/Update/Get/List/Delete for work_items (level = Work | Task). Filters: level, status, milestoneId, assignee. | 1.3, 1.4 |
@@ -123,6 +126,33 @@ Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases 
 
 ---
 
+## Phase 2b: REST endpoints
+
+**Goal:** Expose the same MCP tools and resources over HTTP so that scripts, CI, and remote clients can call them without stdio. Session is keyed by context_key (from header); same scope and validation as stdio.
+
+### Tasks
+
+| ID | Task | Details | Dependencies |
+|----|------|---------|--------------|
+| 2b.1 | Add HTTP host | Add ASP.NET Core (or equivalent) so the server can run as an HTTP host. Configurable port (e.g. env `ASPNETCORE_URLS` or `PROJECT_MCP_HTTP_PORT`). May run alongside stdio in the same process (e.g. Kestrel for HTTP + stdio reader) or as a separate run mode. | Phase 0 |
+| 2b.2 | REST initialize | Expose `POST /mcp/initialize` (or equivalent): accept client name, version, capabilities; resolve agent to Resource; issue context_key; return capabilities, tool list, resource URIs. Reuse same logic as stdio Initialize. | 2.1, 2.2, 2b.1 |
+| 2b.3 | REST tool invocations | Expose tool calls via HTTP (e.g. `POST /mcp/tools/call` with body `{ "name", "arguments" }`). Require header `X-Context-Key` (or `MCP-Context-Key`); optional `X-Correlation-Id`. Route to same tool handlers as stdio; return JSON. | 2.3, 2b.1 |
+| 2b.4 | REST resources | Expose resources via HTTP (e.g. `GET /mcp/resources/project/current/spec`). Require context_key header. Route to same resource handlers as stdio; return JSON. | 2.3, 2b.1 |
+| 2b.5 | Document REST | Document base URL, initialize flow, header names, and example requests in README or API docs. | 2b.2, 2b.3, 2b.4 |
+
+### Deliverables
+
+- HTTP server runs; clients can obtain context_key via REST initialize and call tools/read resources via REST with that key.
+- Same session store and scope semantics as stdio; context_key in header on every REST request.
+
+### Acceptance criteria
+
+- [ ] `POST /mcp/initialize` returns context_key and tool/resource list.
+- [ ] With valid context_key header, `POST /mcp/tools/call` (or equivalent) invokes tools; `GET /mcp/resources/...` returns resource content.
+- [ ] Missing or invalid context_key on REST request returns 401 or 400.
+
+---
+
 ## Phase 3: Resources
 
 **Goal:** Implement read-only resources so the client can load project state without calling tools.
@@ -173,9 +203,9 @@ Total rough estimate: **18–28 days** for MCP server phases; web/mobile phases 
 
 ---
 
-## Phase 5: Task tools
+## Phase 5: Task tools (work items with level = Task)
 
-**Goal:** task_create, task_update, task_list, task_delete with filters.
+**Goal:** task_create, task_update, task_list, task_delete with filters. Per [04 — MCP Surface](04-mcp-surface.html), task_* tools are aliases for work_item_* constrained to level = Task; implement as work item operations with level = Task.
 
 ### Tasks
 
@@ -354,10 +384,20 @@ Follow these steps to integrate GitHub as the OAuth2 provider.
 
 | ID | Task | Details | Dependencies |
 |----|------|---------|--------------|
-| 9.1 | Add schema/migrations | Tables for requirements, standards, domains, systems, assets, resources, keywords, issues, and junction tables (entity_keywords, system_requirement_associations, item_dependencies, work_item_requirements, issue_requirements, resource_team_members). | 1.3 |
+| 9.1 | Add schema/migrations | Extend schema: **resources** (add oauth2_sub, etc.; table exists from Phase 1), **resource_team_members**; add requirements, standards, domains, systems, assets, keywords, issues, and junction tables (entity_keywords, system_requirement_associations, item_dependencies, work_item_requirements, issue_requirements). See [03 — Data Model](03-data-model.html). | 1.3 |
 | 9.2 | Repositories/services | CRUD repositories/services for new entities and associations. | 9.1 |
 | 9.3 | MCP tools | Add MCP tools for new entities and association endpoints per [04 — MCP Surface](04-mcp-surface.html). | 9.2 |
 | 9.4 | Resource URIs | Add read-only resources for requirements/issues and enterprise-level lists. | 9.2 |
+
+### Deliverables
+
+- All extended entities (requirements, standards, domains, systems, assets, resources, keywords, issues) and junction tables implemented; migrations apply.
+- MCP tools and resources for new entities; scope enforced per session.
+
+### Acceptance criteria
+
+- [ ] requirement_*, standard_*, domain_*, system_*, asset_*, resource_*, keyword_*, issue_* tools work; association tools (work_item_requirement_add/remove, etc.) work.
+- [ ] project://current/requirements, project://current/issues, enterprise://current/resources return scope-appropriate data.
 
 ---
 
@@ -374,6 +414,17 @@ Follow these steps to integrate GitHub as the OAuth2 provider.
 | 10.3 | Full-text search schema | Add tsvector columns and GIN indexes for searchable entities. | 9.1 |
 | 10.4 | Web app UI | Blazor web app implementing tree/search/reports/Gantt/issues. | 10.2 |
 
+### Deliverables
+
+- HTTP API with documented contract; scope_slug and auth enforced.
+- Blazor web app with tree, search, reports, Gantt, issues per [14 — Project Web App](14-project-web-app.html).
+- Full-text search schema (tsvector/GIN) for searchable entities.
+
+### Acceptance criteria
+
+- [ ] API endpoints return correct data for authenticated user scope; unauthenticated requests get 401.
+- [ ] Web app loads; user can navigate tree, run search, view reports and Gantt, manage issues.
+
 ---
 
 ## Phase 11: Mobile app
@@ -388,6 +439,16 @@ Follow these steps to integrate GitHub as the OAuth2 provider.
 | 11.2 | Task queue UI | Queue list, detail, status updates, reorder (if supported). | 11.1 |
 | 11.3 | Distribution setup | Build/signing pipeline and release packaging. | 11.2 |
 
+### Deliverables
+
+- Avalonia mobile app with GitHub OAuth2 (PKCE), API integration, and task queue UI per [15 — Mobile App](15-mobile-app.html).
+- Build/packaging for target platforms (e.g. Android, iOS, or desktop).
+
+### Acceptance criteria
+
+- [ ] User can sign in via GitHub; task queue shows assigned work items; status updates sync to API.
+- [ ] App builds and runs on at least one target platform.
+
 ---
 
 ## Dependency graph (summary)
@@ -401,7 +462,8 @@ flowchart LR
   P4[Phase 4: Project tools]
   P5[Phase 5: Task tools]
   P6[Phase 6: Planning tools]
-  P7[Phase 7: Logging/docs]
+  P2b[Phase 2b: REST]
+  P7[Phase 7: Logging and config docs]
   P8[Phase 8: GitHub OAuth2]
   P9[Phase 9: Extended entities]
   P10[Phase 10: Web app + API]
@@ -409,6 +471,7 @@ flowchart LR
 
   P0 --> P2
   P1 --> P2
+  P2 --> P2b
   P2 --> P3
   P2 --> P4
   P4 --> P5
@@ -434,14 +497,14 @@ flowchart LR
 | Risk | Mitigation |
 |------|------------|
 | MCP SDK API changes | Pin SDK version; check release notes before upgrading. |
-| Schema drift from data model | Keep [03 — Data Model](03-data-model.html) and migrations in sync; review in Phase 1 and 8. |
+| Schema drift from data model | Keep [03 — Data Model](03-data-model.html) and migrations in sync; review in Phase 1 and Phase 9. |
 | Scope creep to full data model | Deliver in phases: Phase 1 minimal scope, Phase 9+ for extended entities, Phase 10–11 for web/mobile. |
 
 ---
 
 ## Out of scope for initial implementation
 
-- HTTP/SSE transport for MCP (stdio only for v1).
+- MCP-over-SSE or streaming HTTP transport (REST is request/response only).
 - Multi-project/multi-enterprise in one MCP process (single scope per session is enough for v1).
 - End-user authentication for MCP tools (MCP relies on **agent identity**; web app/API use GitHub OAuth2 in Phase 8).
 - GitHub as MCP backend adapter (PostgreSQL only for MCP; adapter interface can be added later).
