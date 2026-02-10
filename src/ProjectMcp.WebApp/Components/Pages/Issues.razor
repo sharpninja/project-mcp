@@ -1,0 +1,59 @@
+@page "/issues"
+@attribute [Authorize]
+@using ProjectMcp.WebApp.Models
+@inject IIssueService IssueService
+
+<PageTitle>Issues</PageTitle>
+
+<ScopeGuard>
+    <h1>Issues</h1>
+
+    @if (_issues is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (_issues.Count == 0)
+    {
+        <p>No issues in scope.</p>
+    }
+    else
+    {
+        <ul class="list-group">
+            @foreach (var issue in _issues)
+            {
+                <li class="list-group-item">
+                    <strong>@issue.Title</strong>
+                    <div class="text-muted">@issue.DisplayId</div>
+                </li>
+            }
+        </ul>
+    }
+</ScopeGuard>
+
+@code {
+    [CascadingParameter(Name = "ScopeState")]
+    private ScopeState? ScopeState { get; set; }
+
+    private IReadOnlyList<ProjectMCP.TodoEngine.Models.Issue>? _issues;
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded || ScopeState?.IsLoading == true || ScopeState?.Scope is null)
+            return;
+        var scope = ScopeState.Scope;
+        _loaded = true;
+        if (scope.AllowedProjectIds.Count == 0)
+        {
+            _issues = Array.Empty<ProjectMCP.TodoEngine.Models.Issue>();
+            return;
+        }
+        var results = new List<ProjectMCP.TodoEngine.Models.Issue>();
+        foreach (var projectId in scope.AllowedProjectIds)
+        {
+            var projectIssues = await IssueService.ListAsync(scope, projectId);
+            results.AddRange(projectIssues);
+        }
+        _issues = results;
+    }
+}

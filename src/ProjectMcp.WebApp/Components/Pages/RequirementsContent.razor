@@ -1,0 +1,304 @@
+@using ProjectMcp.WebApp.Models
+@using ProjectMCP.TodoEngine.Models
+@inject IRequirementService RequirementService
+@inject IProjectService ProjectService
+@inject IKeywordService KeywordService
+
+<h1>Requirements</h1>
+
+<div class="mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="Refresh" disabled="@(_requirements is null)">Refresh</button>
+</div>
+
+@if (_requirements is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+        <span class="text-muted">Keyword filter:</span>
+        <select class="form-select form-select-sm" style="width: auto;" @bind="_filterKeywordIdStr">
+            <option value="">All</option>
+            @foreach (var kw in _keywords)
+            {
+                <option value="@kw.Id">@kw.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    @foreach (var colId in _columnOrder)
+                    {
+                        var col = _columns[colId];
+                        <th class="pe-2">
+                            <div class="d-flex align-items-center gap-1">
+                                <span style="cursor: pointer; user-select: none;" @onclick="() => SetSort(colId)" title="Click to sort">@col @SortIcon(colId)</span>
+                                @if (colId == "Slug")
+                                {
+                                    <input type="text" class="form-control form-control-sm" style="min-width: 6rem;" placeholder="Filter" @bind="_filterSlug" @bind:event="oninput" />
+                                }
+                                else if (colId == "Title")
+                                {
+                                    <input type="text" class="form-control form-control-sm" style="min-width: 8rem;" placeholder="Filter" @bind="_filterTitle" @bind:event="oninput" />
+                                }
+                                else if (colId == "Keywords")
+                                {
+                                    @* Keyword filter is above table *@
+                                }
+                                else if (colId == "State")
+                                {
+                                    <select class="form-select form-select-sm" style="min-width: 5rem;" @bind="_filterState">
+                                        <option value="">All</option>
+                                        @foreach (var s in _stateOptions)
+                                        {
+                                            <option value="@((int)s)">@s</option>
+                                        }
+                                    </select>
+                                }
+                                else if (colId == "Description")
+                                {
+                                    <input type="text" class="form-control form-control-sm" style="min-width: 6rem;" placeholder="Filter" @bind="_filterDescription" @bind:event="oninput" />
+                                }
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1" title="Move left" @onclick="() => MoveColumn(colId, -1)" disabled="@(IsFirstColumn(colId))">‹</button>
+                                <button type="button" class="btn btn-link btn-sm p-0" title="Move right" @onclick="() => MoveColumn(colId, 1)" disabled="@(IsLastColumn(colId))">›</button>
+                            </div>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in SortedRequirements)
+                {
+                    <tr>
+                        @foreach (var colId in _columnOrder)
+                        {
+                            <td class="pe-2 align-top">
+                                @switch (colId)
+                                {
+                                    case "Slug":
+                                        <span>@r.DisplayId</span>
+                                        break;
+                                    case "Title":
+                                        <span>@r.Title</span>
+                                        break;
+                                    case "Keywords":
+                                        @if (r.Keyword is not null)
+                                        {
+                                            <span class="badge rounded-pill bg-secondary">@r.Keyword.Name</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                        break;
+                                    case "State":
+                                        <span>@r.State</span>
+                                        break;
+                                    case "Description":
+                                        <span class="text-muted small">@(r.Description is null ? "—" : (r.Description.Length > 80 ? r.Description[..80] + "…" : r.Description))</span>
+                                        break;
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (FilteredRequirements.Count == 0)
+    {
+        <p class="alert alert-info mt-2 mb-0">
+            No requirements in scope@( _projectNames.Count > 0 ? $" for {string.Join(", ", _projectNames)}" : "" ).
+            Ensure the banner project matches the project you ingested for, then use <strong>Refresh</strong> or ingest requirements for this project.
+        </p>
+    }
+    else
+    {
+        <p class="text-muted small mt-2">@FilteredRequirements.Count requirement(s)</p>
+    }
+}
+
+@code {
+    [CascadingParameter(Name = "Scope")]
+    private UserScope Scope { get; set; } = null!;
+
+    private List<Requirement>? _requirements;
+    private List<string> _projectNames = new();
+    private List<Keyword> _keywords = new();
+
+    private string _filterSlug = "";
+    private string _filterTitle = "";
+    private string _filterKeywordIdStr = "";
+    private string _filterState = "";
+    private string _filterDescription = "";
+
+    private string? _sortColumn = "Slug";
+    private bool _sortAsc = true;
+
+    private static readonly RequirementState[] _stateOptions = (RequirementState[])Enum.GetValues(typeof(RequirementState));
+    private static readonly Dictionary<string, string> _columns = new()
+    {
+        ["Slug"] = "Slug",
+        ["Title"] = "Title",
+        ["Keywords"] = "Keywords",
+        ["State"] = "State",
+        ["Description"] = "Description"
+    };
+    private List<string> _columnOrder = new() { "Slug", "Title", "Keywords", "State", "Description" };
+
+    private string _scopeKey = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = ScopeKey(Scope);
+        if (key == _scopeKey && _requirements is not null)
+            return;
+        _scopeKey = key;
+        await LoadDataAsync();
+    }
+
+    private async Task Refresh()
+    {
+        await LoadDataAsync();
+        StateHasChanged();
+    }
+
+    private static string ScopeKey(UserScope scope)
+    {
+        var ids = scope.AllowedProjectIds.Count > 0
+            ? scope.AllowedProjectIds.OrderBy(x => x)
+            : Enumerable.Empty<Guid>();
+        return string.Join(",", ids);
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var projectIds = new List<Guid>();
+        var projectNames = new List<string>();
+        if (Scope.AllowedProjectIds.Count > 0)
+        {
+            projectIds.AddRange(Scope.AllowedProjectIds);
+            foreach (var pid in projectIds)
+            {
+                var p = await ProjectService.GetAsync(Scope, pid);
+                if (p is not null) projectNames.Add(p.Name);
+            }
+        }
+        else
+        {
+            var projects = await ProjectService.ListAsync(Scope);
+            projectIds.AddRange(projects.Select(p => p.Id));
+            projectNames.AddRange(projects.Select(p => p.Name));
+        }
+
+        var list = new List<Requirement>();
+        foreach (var projectId in projectIds)
+        {
+            var reqs = await RequirementService.ListAsync(Scope, projectId);
+            list.AddRange(reqs);
+        }
+        _requirements = list;
+        _projectNames = projectNames;
+
+        var keywordList = new List<Keyword>();
+        foreach (var eid in Scope.AllowedEnterpriseIds)
+        {
+            var kws = await KeywordService.ListAsync(Scope, eid);
+            keywordList.AddRange(kws);
+        }
+        _keywords = keywordList.GroupBy(k => k.Id).Select(g => g.First()).OrderBy(k => k.Name).ToList();
+    }
+
+    private IReadOnlyList<Requirement> FilteredRequirements
+    {
+        get
+        {
+            if (_requirements is null) return Array.Empty<Requirement>();
+            var q = _requirements.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_filterSlug))
+            {
+                var slug = _filterSlug.Trim();
+                q = q.Where(r => r.DisplayId.Contains(slug, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(_filterTitle))
+            {
+                var t = _filterTitle.Trim();
+                q = q.Where(r => r.Title.Contains(t, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(_filterKeywordIdStr) && Guid.TryParse(_filterKeywordIdStr, out var filterKid))
+            {
+                q = q.Where(r => r.KeywordId == filterKid);
+            }
+            if (!string.IsNullOrWhiteSpace(_filterState) && int.TryParse(_filterState, out var stateInt))
+            {
+                q = q.Where(r => (int)r.State == stateInt);
+            }
+            if (!string.IsNullOrWhiteSpace(_filterDescription))
+            {
+                var d = _filterDescription.Trim();
+                q = q.Where(r => r.Description != null && r.Description.Contains(d, StringComparison.OrdinalIgnoreCase));
+            }
+            return q.ToList();
+        }
+    }
+
+    private IReadOnlyList<Requirement> SortedRequirements
+    {
+        get
+        {
+            var list = FilteredRequirements;
+            if (_sortColumn is null) return list;
+            return _sortColumn switch
+            {
+                "Slug" => _sortAsc ? list.OrderBy(r => r.DisplayId).ToList() : list.OrderByDescending(r => r.DisplayId).ToList(),
+                "Title" => _sortAsc ? list.OrderBy(r => r.Title).ToList() : list.OrderByDescending(r => r.Title).ToList(),
+                "Keywords" => _sortAsc ? list.OrderBy(r => r.Keyword?.Name ?? "").ToList() : list.OrderByDescending(r => r.Keyword?.Name ?? "").ToList(),
+                "State" => _sortAsc ? list.OrderBy(r => r.State).ToList() : list.OrderByDescending(r => r.State).ToList(),
+                "Description" => _sortAsc ? list.OrderBy(r => r.Description ?? "").ToList() : list.OrderByDescending(r => r.Description ?? "").ToList(),
+                _ => list
+            };
+        }
+    }
+
+    private void SetSort(string colId)
+    {
+        if (_sortColumn == colId)
+            _sortAsc = !_sortAsc;
+        else
+        {
+            _sortColumn = colId;
+            _sortAsc = true;
+        }
+    }
+
+    private string SortIcon(string colId)
+    {
+        if (_sortColumn != colId) return "↕";
+        return _sortAsc ? "↑" : "↓";
+    }
+
+    private bool IsFirstColumn(string colId)
+    {
+        return _columnOrder.IndexOf(colId) <= 0;
+    }
+
+    private bool IsLastColumn(string colId)
+    {
+        return _columnOrder.IndexOf(colId) >= _columnOrder.Count - 1;
+    }
+
+    private void MoveColumn(string colId, int delta)
+    {
+        var i = _columnOrder.IndexOf(colId);
+        if (i < 0) return;
+        var j = i + delta;
+        if (j < 0 || j >= _columnOrder.Count) return;
+        _columnOrder.RemoveAt(i);
+        _columnOrder.Insert(j, colId);
+    }
+}

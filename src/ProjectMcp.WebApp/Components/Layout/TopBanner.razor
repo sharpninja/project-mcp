@@ -1,0 +1,57 @@
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.DependencyInjection
+@inject ICurrentSelectionService SelectionService
+@inject IServiceScopeFactory ServiceScopeFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
+
+<div class="top-banner-selection d-flex align-items-center gap-3">
+    <span class="top-banner-label">Enterprise:</span>
+    <span class="top-banner-value">@(SelectionService.EnterpriseName ?? "—")</span>
+    <span class="top-banner-label">Project:</span>
+    <span class="top-banner-value">@(SelectionService.ProjectName ?? "—")</span>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        SelectionService.SelectionChanged += OnSelectionChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        using (var scope = ServiceScopeFactory.CreateScope())
+        {
+            var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+            var scopeModel = await userScopeService.GetScopeAsync(state.User, CancellationToken.None);
+            if (scopeModel.AllowedEnterpriseIds.Count > 0)
+            {
+                var enterpriseId = scopeModel.AllowedEnterpriseIds[0];
+                var enterpriseService = scope.ServiceProvider.GetRequiredService<IEnterpriseService>();
+                var projectService = scope.ServiceProvider.GetRequiredService<IProjectService>();
+                var enterprise = await enterpriseService.GetAsync(scopeModel, enterpriseId);
+                Guid? projectId = null;
+                string? projectName = null;
+                if (scopeModel.AllowedProjectIds.Count > 0)
+                {
+                    projectId = scopeModel.AllowedProjectIds[0];
+                    var project = await projectService.GetAsync(scopeModel, projectId.Value);
+                    projectName = project?.Name;
+                }
+                SelectionService.SetSelection(enterpriseId, enterprise?.Name, projectId, projectName);
+            }
+        }
+    }
+
+    private void OnSelectionChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SelectionService.SelectionChanged -= OnSelectionChanged;
+    }
+}

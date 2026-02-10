@@ -1,0 +1,85 @@
+@inject IAppVersionService VersionService
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid d-flex flex-column gap-0 py-1">
+        <a class="navbar-brand" href="">Project MCP</a>
+        @if (!string.IsNullOrEmpty(_version))
+        {
+            <span class="navbar-version text-white-50 small">@_version</span>
+        }
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="projects">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Projects
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="requirements">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Requirements
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="ingest/requirements">
+                <span class="bi bi-upload" aria-hidden="true"></span> Ingest Requirements
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="standards">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Standards
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="ingest/standards">
+                <span class="bi bi-upload" aria-hidden="true"></span> Ingest Standards
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="issues">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Issues
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="search">
+                <span class="bi bi-search" aria-hidden="true"></span> Search
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="reports">
+                <span class="bi bi-bar-chart" aria-hidden="true"></span> Reports
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="gantt">
+                <span class="bi bi-diagram-3" aria-hidden="true"></span> Gantt
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private string _version = "";
+
+    protected override void OnInitialized()
+    {
+        _version = VersionService.GetVersion();
+    }
+}

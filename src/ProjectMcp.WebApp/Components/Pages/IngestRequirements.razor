@@ -1,0 +1,10 @@
+@page "/ingest/requirements"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using ProjectMcp.WebApp.Models
+
+<PageTitle>Ingest Requirements</PageTitle>
+
+<ScopeGuard>
+    <IngestRequirementsContent />
+</ScopeGuard>

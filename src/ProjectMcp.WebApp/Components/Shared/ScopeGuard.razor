@@ -1,0 +1,40 @@
+@using ProjectMcp.WebApp.Models
+@using ProjectMcp.WebApp.Services
+
+@inject ICurrentSelectionService SelectionService
+
+@if (ScopeState?.IsLoading == true)
+{
+    <p>Loading...</p>
+}
+else if (EffectiveScope is null)
+{
+    <div class="alert alert-warning">You have no projects assigned.</div>
+}
+else
+{
+    <CascadingValue Value="EffectiveScope" Name="Scope">
+        @ChildContent
+    </CascadingValue>
+}
+
+@code {
+    [CascadingParameter(Name = "ScopeState")]
+    private ScopeState? ScopeState { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private UserScope? EffectiveScope
+    {
+        get
+        {
+            var scope = ScopeState?.Scope;
+            if (scope is not null && scope.AllowedEnterpriseIds.Count > 0)
+                return scope;
+            if (SelectionService.EnterpriseId is { } eid && SelectionService.ProjectId is { } pid)
+                return new UserScope(new[] { eid }, new[] { pid }, null);
+            return null;
+        }
+    }
+}

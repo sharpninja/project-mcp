@@ -1,0 +1,10 @@
+@page "/standards"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using ProjectMcp.WebApp.Models
+
+<PageTitle>Standards</PageTitle>
+
+<ScopeGuard>
+    <StandardsContent />
+</ScopeGuard>

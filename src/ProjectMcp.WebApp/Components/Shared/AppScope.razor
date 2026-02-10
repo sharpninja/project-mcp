@@ -1,0 +1,34 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectMcp.WebApp.Models
+@using ProjectMcp.WebApp.Services
+@inject IUserScopeService UserScopeService
+
+<CascadingAuthenticationState>
+    @if (_state.IsLoading)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <CascadingValue Value="_state" Name="ScopeState">
+            @ChildContent
+        </CascadingValue>
+    }
+</CascadingAuthenticationState>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private ScopeState _state = new(true, null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateTask;
+        var scope = await UserScopeService.GetScopeAsync(state.User, CancellationToken.None);
+        _state = new ScopeState(false, scope);
+    }
+}

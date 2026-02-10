@@ -1,0 +1,10 @@
+@page "/requirements"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using ProjectMcp.WebApp.Models
+
+<PageTitle>Requirements</PageTitle>
+
+<ScopeGuard>
+    <RequirementsContent />
+</ScopeGuard>

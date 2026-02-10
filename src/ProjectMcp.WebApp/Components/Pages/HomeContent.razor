@@ -1,0 +1,52 @@
+@using ProjectMcp.WebApp.Models
+@using ProjectMcp.WebApp.Services
+@using ProjectMCP.TodoEngine.Models
+@inject IEnterpriseService EnterpriseService
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <h1>Project MCP</h1>
+    @if (Scope is null || _enterprises.Count == 0)
+    {
+        <p>You have no enterprise assigned.</p>
+    }
+    else if (_enterprises.Count == 1)
+    {
+        <p>You're in <strong>@_enterprises[0].Name</strong>.</p>
+        <p><a href="projects" class="btn btn-primary">Go to Projects</a></p>
+    }
+    else
+    {
+        <p>Your enterprises:</p>
+        <ul>
+            @foreach (var e in _enterprises)
+            {
+                <li><strong>@e.Name</strong></li>
+            }
+        </ul>
+        <p><a href="projects" class="btn btn-primary">Go to Projects</a></p>
+    }
+}
+
+@code {
+    [CascadingParameter(Name = "Scope")]
+    private UserScope? Scope { get; set; }
+
+    private bool _loading = true;
+    private IReadOnlyList<Enterprise> _enterprises = Array.Empty<Enterprise>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Scope is null || !_loading)
+        {
+            if (Scope is null) _loading = false;
+            return;
+        }
+        _enterprises = await EnterpriseService.ListAsync(Scope, CancellationToken.None);
+        _loading = false;
+    }
+}

@@ -1,0 +1,59 @@
+@page "/reports"
+@attribute [Authorize]
+@using ProjectMcp.WebApp.Models
+@inject IReportsService ReportsService
+
+<PageTitle>Reports</PageTitle>
+
+<ScopeGuard>
+    <h1>Reports</h1>
+
+    @if (_summaries is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (_summaries.Count == 0)
+    {
+        <p>No data available.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Project</th>
+                    <th>Total Tasks</th>
+                    <th>In Progress</th>
+                    <th>Done</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var summary in _summaries)
+                {
+                    <tr>
+                        <td>@summary.ProjectId</td>
+                        <td>@summary.TotalTasks</td>
+                        <td>@summary.InProgressTasks</td>
+                        <td>@summary.DoneTasks</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</ScopeGuard>
+
+@code {
+    [CascadingParameter(Name = "ScopeState")]
+    private ScopeState? ScopeState { get; set; }
+
+    private IReadOnlyList<ProjectMcp.WebApp.Models.ReportSummary>? _summaries;
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded || ScopeState?.IsLoading == true || ScopeState?.Scope is null)
+            return;
+        _loaded = true;
+        _summaries = await ReportsService.GetProjectSummariesAsync(ScopeState.Scope);
+    }
+}

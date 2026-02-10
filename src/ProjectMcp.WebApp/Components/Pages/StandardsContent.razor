@@ -1,0 +1,243 @@
+@using ProjectMcp.WebApp.Models
+@using ProjectMCP.TodoEngine.Models
+@inject IStandardService StandardService
+@inject IProjectService ProjectService
+@inject IEnterpriseService EnterpriseService
+
+<h1>Standards</h1>
+
+<div class="mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="Refresh" disabled="@(_standards is null)">Refresh</button>
+</div>
+
+@if (_standards is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    @foreach (var colId in _columnOrder)
+                    {
+                        var col = _columns[colId];
+                        <th class="pe-2">
+                            <div class="d-flex align-items-center gap-1">
+                                <span style="cursor: pointer; user-select: none;" @onclick="() => SetSort(colId)" title="Click to sort">@col @SortIcon(colId)</span>
+                                @if (colId == "Slug")
+                                {
+                                    <input type="text" class="form-control form-control-sm" style="min-width: 6rem;" placeholder="Filter" @bind="_filterSlug" @bind:event="oninput" />
+                                }
+                                else if (colId == "Title")
+                                {
+                                    <input type="text" class="form-control form-control-sm" style="min-width: 8rem;" placeholder="Filter" @bind="_filterTitle" @bind:event="oninput" />
+                                }
+                                else if (colId == "Description")
+                                {
+                                    <input type="text" class="form-control form-control-sm" style="min-width: 6rem;" placeholder="Filter" @bind="_filterDescription" @bind:event="oninput" />
+                                }
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1" title="Move left" @onclick="() => MoveColumn(colId, -1)" disabled="@(IsFirstColumn(colId))">‹</button>
+                                <button type="button" class="btn btn-link btn-sm p-0" title="Move right" @onclick="() => MoveColumn(colId, 1)" disabled="@(IsLastColumn(colId))">›</button>
+                            </div>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in SortedStandards)
+                {
+                    <tr>
+                        @foreach (var colId in _columnOrder)
+                        {
+                            <td class="pe-2 align-top">
+                                @switch (colId)
+                                {
+                                    case "Slug":
+                                        <span>@s.DisplayId</span>
+                                        break;
+                                    case "Title":
+                                        <span>@s.Title</span>
+                                        break;
+                                    case "Description":
+                                        <span class="text-muted small">@(s.Description is null ? "—" : (s.Description.Length > 80 ? s.Description[..80] + "…" : s.Description))</span>
+                                        break;
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (FilteredStandards.Count == 0)
+    {
+        <p class="alert alert-info mt-2 mb-0">
+            No standards in scope@( _scopeDescription.Length > 0 ? $" for {_scopeDescription}" : "" ).
+            Ensure the banner selection matches where you ingested, then use <strong>Refresh</strong> or ingest standards.
+        </p>
+    }
+    else
+    {
+        <p class="text-muted small mt-2">@FilteredStandards.Count standard(s)</p>
+    }
+}
+
+@code {
+    [CascadingParameter(Name = "Scope")]
+    private UserScope Scope { get; set; } = null!;
+
+    private List<Standard>? _standards;
+    private string _scopeDescription = "";
+
+    private string _filterSlug = "";
+    private string _filterTitle = "";
+    private string _filterDescription = "";
+
+    private string? _sortColumn = "Slug";
+    private bool _sortAsc = true;
+
+    private static readonly Dictionary<string, string> _columns = new()
+    {
+        ["Slug"] = "Slug",
+        ["Title"] = "Title",
+        ["Description"] = "Description"
+    };
+    private List<string> _columnOrder = new() { "Slug", "Title", "Description" };
+
+    private string _scopeKey = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = ScopeKey(Scope);
+        if (key == _scopeKey && _standards is not null)
+            return;
+        _scopeKey = key;
+        await LoadDataAsync();
+    }
+
+    private async Task Refresh()
+    {
+        await LoadDataAsync();
+        StateHasChanged();
+    }
+
+    private static string ScopeKey(UserScope scope)
+    {
+        var e = string.Join(",", scope.AllowedEnterpriseIds.OrderBy(x => x));
+        var p = string.Join(",", scope.AllowedProjectIds.OrderBy(x => x));
+        return e + "|" + p;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var list = new List<Standard>();
+        var descriptions = new List<string>();
+
+        foreach (var enterpriseId in Scope.AllowedEnterpriseIds)
+        {
+            var standards = await StandardService.ListEnterpriseAsync(Scope, enterpriseId);
+            list.AddRange(standards);
+            if (standards.Count > 0 && descriptions.Count < 3)
+            {
+                var ent = await EnterpriseService.GetAsync(Scope, enterpriseId);
+                if (ent is not null)
+                    descriptions.Add(ent.Name);
+            }
+        }
+        foreach (var projectId in Scope.AllowedProjectIds)
+        {
+            var standards = await StandardService.ListProjectAsync(Scope, projectId);
+            list.AddRange(standards);
+            if (standards.Count > 0 && descriptions.Count < 3)
+            {
+                var proj = await ProjectService.GetAsync(Scope, projectId);
+                if (proj is not null)
+                    descriptions.Add(proj.Name);
+            }
+        }
+
+        _standards = list;
+        _scopeDescription = string.Join(", ", descriptions.Take(3));
+    }
+
+    private IReadOnlyList<Standard> FilteredStandards
+    {
+        get
+        {
+            if (_standards is null) return Array.Empty<Standard>();
+            var q = _standards.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_filterSlug))
+            {
+                var slug = _filterSlug.Trim();
+                q = q.Where(s => s.DisplayId.Contains(slug, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(_filterTitle))
+            {
+                var t = _filterTitle.Trim();
+                q = q.Where(s => s.Title.Contains(t, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(_filterDescription))
+            {
+                var d = _filterDescription.Trim();
+                q = q.Where(s => s.Description != null && s.Description.Contains(d, StringComparison.OrdinalIgnoreCase));
+            }
+            return q.ToList();
+        }
+    }
+
+    private IReadOnlyList<Standard> SortedStandards
+    {
+        get
+        {
+            var list = FilteredStandards;
+            if (_sortColumn is null) return list;
+            return _sortColumn switch
+            {
+                "Slug" => _sortAsc ? list.OrderBy(s => s.DisplayId).ToList() : list.OrderByDescending(s => s.DisplayId).ToList(),
+                "Title" => _sortAsc ? list.OrderBy(s => s.Title).ToList() : list.OrderByDescending(s => s.Title).ToList(),
+                "Description" => _sortAsc ? list.OrderBy(s => s.Description ?? "").ToList() : list.OrderByDescending(s => s.Description ?? "").ToList(),
+                _ => list
+            };
+        }
+    }
+
+    private void SetSort(string colId)
+    {
+        if (_sortColumn == colId)
+            _sortAsc = !_sortAsc;
+        else
+        {
+            _sortColumn = colId;
+            _sortAsc = true;
+        }
+    }
+
+    private string SortIcon(string colId)
+    {
+        if (_sortColumn != colId) return "↕";
+        return _sortAsc ? "↑" : "↓";
+    }
+
+    private bool IsFirstColumn(string colId)
+    {
+        return _columnOrder.IndexOf(colId) <= 0;
+    }
+
+    private bool IsLastColumn(string colId)
+    {
+        return _columnOrder.IndexOf(colId) >= _columnOrder.Count - 1;
+    }
+
+    private void MoveColumn(string colId, int delta)
+    {
+        var i = _columnOrder.IndexOf(colId);
+        if (i < 0) return;
+        var j = i + delta;
+        if (j < 0 || j >= _columnOrder.Count) return;
+        _columnOrder.RemoveAt(i);
+        _columnOrder.Insert(j, colId);
+    }
+}

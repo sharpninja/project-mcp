@@ -1,0 +1,190 @@
+@using ProjectMcp.WebApp.Models
+@inject IStandardIngestService IngestService
+@inject IEnterpriseService EnterpriseService
+@inject IProjectService ProjectService
+@inject ICurrentSelectionService SelectionService
+@inject ILogger<IngestStandardsContent> Logger
+@inject IJSRuntime JSRuntime
+
+<h1>Ingest Standards</h1>
+<p class="text-muted">Paste a JSON array of standards prepared by an external AI. Each item should have <code>title</code> and optional <code>description</code>.</p>
+
+@if (_enterprises is null)
+{
+    <p>Loading enterprises...</p>
+}
+else
+{
+    <div class="mb-3">
+        <label for="enterprise" class="form-label">Enterprise</label>
+        <select id="enterprise" class="form-select" value="@_selectedEnterpriseId.ToString()" @onchange="OnEnterpriseChange" disabled="@_ingesting">
+            <option value="@Guid.Empty">-- Select enterprise --</option>
+            @foreach (var e in _enterprises)
+            {
+                <option value="@e.Id">@e.Name (@e.DisplayId)</option>
+            }
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="project" class="form-label">Project (optional)</label>
+        <select id="project" class="form-select" value="@_selectedProjectIdStr" @onchange="OnProjectChange" disabled="@_ingesting">
+            <option value="">-- None (enterprise-level) --</option>
+            @foreach (var p in _filteredProjects)
+            {
+                <option value="@p.Id">@p.Name (@p.DisplayId)</option>
+            }
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="json" class="form-label">JSON</label>
+        <textarea id="json" class="form-control font-monospace" rows="12" disabled="@_ingesting" placeholder='[ {"title": "Standard 1", "description": "Optional detail"}, {"title": "Standard 2"} ]'></textarea>
+        <div class="form-text">Paste or type JSON above. Content is read when you click Ingest.</div>
+    </div>
+    @if (_ingesting)
+    {
+        <div class="alert alert-info d-flex align-items-center gap-2 mb-3" role="status">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Ingesting standards… Check server logs for progress.</span>
+        </div>
+    }
+    <button class="btn btn-primary" @onclick="Ingest" disabled="@(_ingesting || _selectedEnterpriseId == Guid.Empty)">
+        @if (_ingesting) { <span>Ingesting...</span> } else { <span>Ingest</span> }
+    </button>
+
+    @if (_result is not null)
+    {
+        <div class="mt-4">
+            @if (_result.CreatedCount > 0)
+            {
+                <div class="alert alert-success">Created @_result.CreatedCount standard(s).</div>
+            }
+            @if (_result.Errors.Count > 0)
+            {
+                <div class="alert alert-warning">
+                    <strong>Issues:</strong>
+                    <ul class="mb-0">
+                        @foreach (var err in _result.Errors)
+                        {
+                            <li>@err</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [CascadingParameter(Name = "Scope")]
+    private UserScope Scope { get; set; } = null!;
+
+    private IReadOnlyList<ProjectMCP.TodoEngine.Models.Enterprise>? _enterprises;
+    private IReadOnlyList<ProjectMCP.TodoEngine.Models.Project>? _projects;
+    private Guid _selectedEnterpriseId = Guid.Empty;
+    private string _selectedProjectIdStr = "";
+    private bool _ingesting;
+    private IngestResult? _result;
+    private bool _loaded;
+
+    private IReadOnlyList<ProjectMCP.TodoEngine.Models.Project> _filteredProjects => _projects is null
+        ? Array.Empty<ProjectMCP.TodoEngine.Models.Project>()
+        : _selectedEnterpriseId == Guid.Empty
+            ? _projects
+            : _projects.Where(p => p.EnterpriseId == _selectedEnterpriseId).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded)
+            return;
+        _loaded = true;
+        Logger.LogInformation("IngestStandardsContent: Loading enterprises and projects for scope");
+        _enterprises = await EnterpriseService.ListAsync(Scope);
+        _projects = await ProjectService.ListAsync(Scope);
+        if (_enterprises?.Count > 0)
+        {
+            _selectedEnterpriseId = _enterprises[0].Id;
+            await SyncSelectionToBannerAsync(_selectedEnterpriseId, null);
+        }
+    }
+
+    private async Task SyncSelectionToBannerAsync(Guid enterpriseId, Guid? projectId)
+    {
+        var enterprise = await EnterpriseService.GetAsync(Scope, enterpriseId);
+        string? projectName = null;
+        if (projectId.HasValue && _projects is not null)
+        {
+            var project = _projects.FirstOrDefault(p => p.Id == projectId.Value);
+            projectName = project?.Name;
+        }
+        SelectionService.SetSelection(enterpriseId, enterprise?.Name, projectId, projectName);
+    }
+
+    private async Task OnEnterpriseChange(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        if (Guid.TryParse(raw, out var id))
+        {
+            _selectedEnterpriseId = id;
+            _selectedProjectIdStr = "";
+            Logger.LogDebug("OnEnterpriseChange: EnterpriseId={EnterpriseId}", id);
+            await SyncSelectionToBannerAsync(id, null);
+        }
+        else
+        {
+            _selectedEnterpriseId = Guid.Empty;
+            _selectedProjectIdStr = "";
+        }
+    }
+
+    private async Task OnProjectChange(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        if (!string.IsNullOrWhiteSpace(raw) && Guid.TryParse(raw, out var id))
+        {
+            _selectedProjectIdStr = id.ToString();
+            Logger.LogDebug("OnProjectChange: ProjectId={ProjectId}", id);
+            await SyncSelectionToBannerAsync(_selectedEnterpriseId, id);
+        }
+        else
+        {
+            _selectedProjectIdStr = "";
+            await SyncSelectionToBannerAsync(_selectedEnterpriseId, null);
+        }
+    }
+
+    private async Task Ingest()
+    {
+        if (_selectedEnterpriseId == Guid.Empty)
+            return;
+        string json;
+        try
+        {
+            json = await JSRuntime.InvokeAsync<string>("getTextareaValue", "json") ?? "";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Ingest: failed to read textarea");
+            _result = new IngestResult(0, new[] { "Could not read JSON from the text area." });
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            _result = new IngestResult(0, new[] { "Paste or enter JSON in the text area first." });
+            return;
+        }
+        var projectId = Guid.TryParse(_selectedProjectIdStr, out var pid) ? (Guid?)pid : null;
+        Logger.LogInformation("Ingest started: EnterpriseId={EnterpriseId}, ProjectId={ProjectId}, JsonLength={JsonLength}", _selectedEnterpriseId, projectId, json.Length);
+        _ingesting = true;
+        _result = null;
+        try
+        {
+            _result = await IngestService.IngestAsync(Scope, _selectedEnterpriseId, projectId, json, CancellationToken.None);
+            Logger.LogInformation("Ingest finished: Created={Created}, Errors={ErrorCount}", _result.CreatedCount, _result.Errors.Count);
+            await SyncSelectionToBannerAsync(_selectedEnterpriseId, projectId);
+        }
+        finally
+        {
+            _ingesting = false;
+        }
+    }
+}

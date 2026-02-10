@@ -1,0 +1,67 @@
+@page "/projects"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using ProjectMcp.WebApp.Models
+@inject IProjectService ProjectService
+@inject IEnterpriseService EnterpriseService
+@inject ICurrentSelectionService SelectionService
+
+<PageTitle>Projects</PageTitle>
+
+<ScopeGuard>
+    <h1>Projects</h1>
+    <p class="text-muted">Select a project to set it as the current enterprise and project in the top banner.</p>
+
+    @if (_projects is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (_projects.Count == 0)
+    {
+        <p>No projects in scope.</p>
+    }
+    else
+    {
+        <ul class="list-group">
+            @foreach (var project in _projects)
+            {
+                var enterpriseName = _enterpriseNames.GetValueOrDefault(project.EnterpriseId) ?? project.EnterpriseId.ToString();
+                var isCurrent = SelectionService.ProjectId == project.Id;
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>@project.Name</strong>
+                        <div class="text-muted">@project.DisplayId · @enterpriseName</div>
+                    </div>
+                    <button type="button" class="btn @(isCurrent ? "btn-secondary" : "btn-outline-primary") btn-sm" @onclick="() => SetAsCurrent(project, enterpriseName)">
+                        @(isCurrent ? "Current" : "Set as current")
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+</ScopeGuard>
+
+@code {
+    [CascadingParameter(Name = "ScopeState")]
+    private ScopeState? ScopeState { get; set; }
+
+    private IReadOnlyList<ProjectMCP.TodoEngine.Models.Project>? _projects;
+    private Dictionary<Guid, string> _enterpriseNames = new();
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded || ScopeState?.IsLoading == true || ScopeState?.Scope is null)
+            return;
+        _loaded = true;
+        _projects = await ProjectService.ListAsync(ScopeState.Scope);
+        var enterprises = await EnterpriseService.ListAsync(ScopeState.Scope);
+        _enterpriseNames = enterprises.ToDictionary(e => e.Id, e => e.Name);
+    }
+
+    private void SetAsCurrent(ProjectMCP.TodoEngine.Models.Project project, string enterpriseName)
+    {
+        SelectionService.SetSelection(project.EnterpriseId, enterpriseName, project.Id, project.Name);
+        StateHasChanged();
+    }
+}

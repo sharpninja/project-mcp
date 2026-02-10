@@ -1,0 +1,63 @@
+@page "/gantt"
+@attribute [Authorize]
+@using ProjectMcp.WebApp.Models
+@inject IGanttService GanttService
+
+<PageTitle>Gantt</PageTitle>
+
+<ScopeGuard>
+    <h1>Gantt</h1>
+
+    @if (_items is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (_items.Count == 0)
+    {
+        <p>No items to display.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Start</th>
+                    <th>Due</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.Title</td>
+                        <td>@item.Start?.ToString("u")</td>
+                        <td>@item.Due?.ToString("u")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</ScopeGuard>
+
+@code {
+    [CascadingParameter(Name = "ScopeState")]
+    private ScopeState? ScopeState { get; set; }
+
+    private IReadOnlyList<ProjectMcp.WebApp.Models.GanttItem>? _items;
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded || ScopeState?.IsLoading == true || ScopeState?.Scope is null)
+            return;
+        var scope = ScopeState.Scope;
+        _loaded = true;
+        if (scope.AllowedProjectIds.Count == 0)
+        {
+            _items = Array.Empty<ProjectMcp.WebApp.Models.GanttItem>();
+            return;
+        }
+        _items = await GanttService.GetItemsAsync(scope, scope.AllowedProjectIds[0]);
+    }
+}
